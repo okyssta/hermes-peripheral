@@ -38,12 +38,12 @@
 <div class="kicker">Hermes plugin hackathon · verification dossier</div>
 <h1>Peripheral</h1>
 <div class="sub">A memory of what was on your screen — hands-on verification, claim by claim.</div>
-<p class="lede">Version 2.0.1 · catalog pins the commit tagged <span class="mono">v2.0.1</span>
-(<span class="mono">scripts/check_release.py</span> proves <span class="mono">git rev-parse v2.0.1</span>
+<p class="lede">Version 2.0.2 · catalog pins the commit tagged <span class="mono">v2.0.2</span>
+(<span class="mono">scripts/check_release.py</span> proves <span class="mono">git rev-parse v2.0.2</span>
 equals the <span class="mono">sha</span> in <span class="mono">catalog-entry.yaml</span>) ·
-docs built at <span class="mono">905dfa69475a</span> (master) — the tree immediately
+docs built at <span class="mono">484210f8b63c</span> (master) — the tree immediately
 before this file was committed, since a PDF cannot contain the SHA of the commit that
-adds it — the tag <span class="mono">v2.0.1</span> names the commit that does · 2026-11-05 18:04 UTC ·
+adds it — the tag <span class="mono">v2.0.2</span> names the commit that does · 2026-11-05 18:08 UTC ·
 MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
 
 <blockquote>
@@ -211,7 +211,7 @@ python3 scripts/make_dossier.py</pre>
       The transcript is a real provider session against the real handlers, not a rendered script.</li>
 </ul>
 
-<h2>8. Change log: 1.0.1 → 2.0.1</h2>
+<h2>8. Change log: 1.0.1 → 2.0.2</h2>
 <table>
   <tr><th>Area</th><th>Change</th></tr>
   <tr><td>Capture</td><td>new <code>capture.py</code>: X11 (ffmpeg), Wayland (grim), macOS (screencapture), Windows (PowerShell), ImageMagick/scrot/maim fallbacks; argv-only, timeouts, no shell</td></tr>
@@ -221,9 +221,9 @@ python3 scripts/make_dossier.py</pre>
   <tr><td>Search</td><td>prefix fallback for OCR noise, with an honest-miss test</td></tr>
   <tr><td>Surface</td><td><code>/peripheral capture</code>, <code>/peripheral watch on|off</code>, capture readiness in status; skill rewritten</td></tr>
   <tr><td>Tests</td><td>27 → 48</td></tr>
-  <tr><td>Docs</td><td>2.0.1: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice); the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
+  <tr><td>Docs</td><td>2.0.2: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice), and <code>scripts/check_release.py</code> now proves tag == pin and that the shipped PDF is the recorded build; the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 
-<footer>Peripheral 2.0.1 · release <span class="mono">v2.0.1</span> · dossier generated from the repository at
-<span class="mono">905dfa69475af362206a000d0d6cdc4522230d3d</span> · every figure in this document is read from the build, not typed.</footer>
+<footer>Peripheral 2.0.2 · release <span class="mono">v2.0.2</span> · dossier generated from the repository at
+<span class="mono">484210f8b63cd45f51e86e759416a95872d648aa</span> · every figure in this document is read from the build, not typed.</footer>
 </body></html>
