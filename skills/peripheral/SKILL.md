@@ -1,7 +1,7 @@
 ---
 name: peripheral
 description: "Remember and search what was on the user's screen — screenshots and live screen captures, locally OCR'd."
-version: 2.0.2
+version: 2.1.0
 author: kyssta
 license: MIT
 metadata:

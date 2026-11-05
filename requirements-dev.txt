@@ -1,0 +1,10 @@
+# Test-only dependencies. The plugin itself is stdlib + Pillow (a Hermes core
+# dependency); the suite additionally builds PNGs with Pillow and reads
+# plugin.yaml with PyYAML. Install into any venv — never inside the plugin
+# directory, because `hermes plugins validate .` scans the tree it is given and
+# would flag the venv's binaries:
+#
+#   uv venv /tmp/peripheral-venv && uv pip install --python /tmp/peripheral-venv/bin/python -r requirements-dev.txt
+pytest>=8
+pillow>=10
+pyyaml>=6

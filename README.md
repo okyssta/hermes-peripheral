@@ -243,11 +243,16 @@ This plugin looks at your screen, so it is built to be boring about it:
 ## Tests
 
 ```bash
-uv venv .venv && uv pip install --python .venv/bin/python pytest pillow pyyaml
-.venv/bin/python -m pytest tests -q       # 48 passed
+uv venv /tmp/peripheral-venv && uv pip install --python /tmp/peripheral-venv/bin/python -r requirements-dev.txt
+/tmp/peripheral-venv/bin/python -m pytest tests -q   # 60 passed
 hermes plugins validate .                 # Validation passed (security scan: safe)
 python3 scripts/check_release.py          # release tag == catalog pin == shipped dossier
 ```
+
+The venv lives outside the checkout on purpose: `hermes plugins validate .` scans every
+file under the directory it is given (bar git-ignored paths), so a stray virtualenv in
+the tree reads as a `dangerous: binary_file` finding even though nothing in the plugin
+changed. Run the suite from a venv you keep beside the checkout, not inside it.
 
 The tests build real PNGs with real text and run the real pipeline: indexing, ranked
 retrieval, incremental rescans, duplicate and near-duplicate rejection, retention,
@@ -255,8 +260,35 @@ forget (rows **and** thumbnails **and** captured frames), redaction of OCR text 
 agent event details, FTS operator injection, time-expression parsing, `before`/`since`
 bounds, the capture backends' argv construction (no shell, no display means no
 command), capture dedupe and the change gate, the no-OCR visual index, the multimodal
-result envelope, and a manifest contract test that keeps `plugin.yaml` and the code
-naming the same things.
+result envelope, the vision gate (explicit override wins, the host is asked when it is
+absent, a raising or missing host gate is text-only), and a manifest contract test that
+keeps `plugin.yaml` and the code naming the same things.
+
+### Does a screen actually reach the model?
+
+An image is attached when the configuration says the model can see one, and only then:
+`screen_show` / `screen_capture` read `model.supports_vision` (or its `vision` alias),
+then `agent.image_input_mode` (`text` vetoes, `native` opts in), then
+`providers.<provider>.models.<model>.supports_vision` for a custom or relayed provider.
+Those are documented `config.yaml` keys, in the order Hermes' own image routing reads
+them — the plugin imports no Hermes internals, so a core release cannot break it. Text
+results are always valid, so anything unset stays text.
+
+A vision model is never stuck: the tool schema tells it to pass `image: true`, which
+forces the attachment for that call.
+
+```bash
+python3 -c "from peripheral import tools; print(tools.vision_attached())"   # inside a Hermes env
+```
+
+What this does *not* do: consult the models.dev catalogue. Hermes resolves a model's
+vision support there, but only through a private core function
+(`tools.vision_tools._native_tool_result_images`), and catalog rule 9 asks plugins to
+stay on public surfaces — so on a model that is vision-capable in the catalogue but
+never declared in `config.yaml`, Peripheral leaves the image off and the model asks for
+it with `image: true`. Measured here: the plugin and the host's own gate agree on 4 of
+5 configs, and the fifth is exactly that catalogue-only case.
+
 
 The demo is reproducible too:
 

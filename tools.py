@@ -30,26 +30,87 @@ def get_settings() -> Settings:
     return current_settings()
 
 
-def vision_attached() -> bool:
-    """True when the user has declared that the active model accepts images.
+def _capability_flag(block: Any) -> bool | None:
+    """``supports_vision``/``vision`` from a config block, or None when unset."""
+    if not isinstance(block, dict):
+        return None
+    value = block.get("supports_vision", block.get("vision"))
+    return value if isinstance(value, bool) else None
 
-    Only public surfaces are used: ``model.supports_vision`` in ``config.yaml`` is
-    the documented way to state a model's capability, and it is opt-in. When it is
-    absent the answer is False — a text-only result is always valid, a stray image
-    block is not. A model that knows it can see may still ask for the image
-    explicitly with ``image: true``.
+
+def _model_identity(config: dict[str, Any]) -> tuple[str, str]:
+    """The (provider, model) a tool result would be sent with, from config.yaml."""
+    block = config.get("model")
+    if not isinstance(block, dict):
+        return "", ""
+    model = str(block.get("default") or block.get("model") or block.get("name") or "").strip()
+    provider = str(block.get("provider") or "").strip()
+    return provider, model
+
+
+def vision_attached() -> bool:
+    """True when the configured model is declared able to see images.
+
+    Only documented ``config.yaml`` keys are consulted, in the order Hermes reads
+    them for its own image routing — no private core API, so nothing here can break
+    on a Hermes release that is not also a documented config change:
+
+    1. ``model.supports_vision`` (or its ``vision`` alias) — the explicit override;
+    2. ``agent.image_input_mode`` — ``text`` vetoes, ``native`` opts in;
+    3. ``providers.<provider>.models.<model>.supports_vision`` — the per-model
+       override for a custom or relayed provider.
+
+    When none of them says anything the answer is False: a text-only result is always
+    valid, a stray image block is not. Two ways to get the image anyway — declare
+    vision support in the config above, or call the tool with ``image: true``, which
+    a vision model can decide for itself. A model that can see but is told "text"
+    here is never stuck: the schema tells it to pass ``image: true``.
     """
     try:
         from hermes_cli.config import load_config_readonly
 
         config = load_config_readonly() or {}
-        model = config.get("model")
-        if isinstance(model, dict):
-            declared = model.get("supports_vision", model.get("vision"))
-            if isinstance(declared, bool):
-                return declared
     except Exception:
         return False
+    block = config.get("model")
+    if not isinstance(block, dict):
+        return False
+
+    declared = _capability_flag(block)
+    if declared is not None:
+        return declared
+
+    agent_block = config.get("agent")
+    mode = str((agent_block or {}).get("image_input_mode") or "").strip().lower() if isinstance(agent_block, dict) else ""
+    if mode == "text":
+        return False
+    if mode == "native":
+        return True
+
+    provider, model = _model_identity(config)
+    if not model:
+        return False
+    providers = config.get("providers")
+    maps: list[Any] = []
+    if isinstance(providers, dict):
+        if provider and isinstance(providers.get(provider), dict):
+            maps.append(providers[provider].get("models"))
+        # ``model.default`` is often the catalog id (``anthropic/claude-opus-4.6``)
+        # with no provider key set: the override then lives under that provider.
+        if not provider and "/" in model:
+            head = model.split("/", 1)[0]
+            if isinstance(providers.get(head), dict):
+                maps.append(providers[head].get("models"))
+    keys = [model]
+    if "/" in model:
+        keys.append(model.split("/", 1)[1])
+    for entry_map in maps:
+        if not isinstance(entry_map, dict):
+            continue
+        for key in keys:
+            flag = _capability_flag(entry_map.get(key))
+            if flag is not None:
+                return flag
     return False
 
 

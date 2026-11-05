@@ -232,9 +232,15 @@ MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
       <td>no HTTP client imported anywhere in the plugin; <code>hermes plugins validate</code> security scan: safe; only local subprocesses (tesseract, capture binary)</td></tr>
   <tr><td>Useful to ~90% of Hermes users</td><td><span class="tag hyp">hypothesis</span></td>
       <td>true for anyone with a display (capture works with no screenshot habit) or a screenshot folder; a headless user with neither gets nothing until they add a folder — stated, not hidden</td></tr>
-  <tr><td>Native image attachment in tool results</td><td><span class="tag ok">demonstrated (envelope)</span></td>
-      <td>envelope shape asserted by <code>test_screen_show_attaches_the_image_when_the_model_can_see</code>;
-      the shipped default requires the model's declared vision support, so a text-only model gets text — no provider error</td></tr>
+  <tr><td>Native image attachment in tool results</td><td><span class="tag ok">demonstrated</span></td>
+      <td>envelope shape asserted by <code>test_screen_show_attaches_the_image_when_the_model_can_see</code>; the gate by
+      <code>tests/test_vision_gate.py</code> (explicit <code>model.supports_vision</code>, <code>agent.image_input_mode</code>,
+      per-model <code>providers.&lt;p&gt;.models.&lt;m&gt;.supports_vision</code>, non-bool values ignored, unreadable config fails
+      closed). With <code>model: gpt-4o / provider: openai</code> plus a per-model override, <code>screen_show</code> returns the
+      <code>_multimodal</code> envelope with the image; with a text-only model it stays a string — both executed here. The plugin
+      agrees with the host's own gate on 4 of 5 probes: the one it declines is a model the models.dev catalogue knows and
+      <code>config.yaml</code> does not, because that lookup is a private core function and rule 9 asks plugins to stay public.
+      <code>image: true</code> covers that case</td></tr>
   <tr><td>A live end-to-end agent turn through the Hermes gateway</td><td><span class="tag neg">negative</span></td>
       <td><code>hermes chat -q</code> on this host rejects new sessions with <code>invalid_params</code> for any prompt, with the plugin disabled and on a second profile — independent of Peripheral.
       The demo therefore drives the same handlers through the provider's tool-calling API and commits the transcript</td></tr>
@@ -289,8 +295,8 @@ MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
 
 <h2>6. Reproduction</h2>
 <pre class="mono small">git clone https://github.com/okyssta/hermes-peripheral &amp;&amp; cd hermes-peripheral
-uv venv .venv &amp;&amp; uv pip install --python .venv/bin/python pytest pillow pyyaml
-.venv/bin/python -m pytest tests -q          # {tests} passed
+uv venv /tmp/peripheral-venv &amp;&amp; uv pip install --python /tmp/peripheral-venv/bin/python -r requirements-dev.txt
+/tmp/peripheral-venv/bin/python -m pytest tests -q   # {tests} passed
 hermes plugins validate .                    # Validation passed
 
 # rebuild the demo evidence from scratch (needs a display + a browser)
@@ -313,8 +319,12 @@ python3 scripts/make_dossier.py</pre>
       image attachment so the model can read what OCR could not.</li>
   <li><strong>Background capture sees everything on the display.</strong> That is the point and the risk. It is off by
       default, rate-limited, and deletable per screen; the README says so in the privacy section rather than burying it.</li>
-  <li><strong>Native image attachment depends on the model.</strong> When the configured model does not declare vision,
-      results stay text (with the image path), so no provider is ever handed a block it cannot read.</li>
+  <li><strong>Native image attachment follows the config, not the catalogue.</strong> A screen is attached when
+      <code>config.yaml</code> says the model can see (<code>model.supports_vision</code>, <code>agent.image_input_mode</code>,
+      or a per-model <code>providers.&lt;p&gt;.models.&lt;m&gt;</code> override); a model the models.dev catalogue knows but the
+      config does not falls back to text and asks for the image with <code>image: true</code>. The catalogue lookup lives behind a
+      private core function, and catalog rule 9 asks plugins to stay on public surfaces — so this is a stated trade, not an
+      oversight</li>
   <li><strong>Cross-platform capture paths are implemented, argued and unit-tested, but only X11 was executed here.</strong>
       A maintainer on macOS/Windows would be the right person to confirm the other backends.</li>
   <li><strong>No live gateway turn was possible on this host</strong> (<code>invalid_params</code>, plugin-independent).
@@ -331,6 +341,12 @@ python3 scripts/make_dossier.py</pre>
   <tr><td>Search</td><td>prefix fallback for OCR noise, with an honest-miss test</td></tr>
   <tr><td>Surface</td><td><code>/peripheral capture</code>, <code>/peripheral watch on|off</code>, capture readiness in status; skill rewritten</td></tr>
   <tr><td>Tests</td><td>27 → {tests}</td></tr>
+  <tr><td>Vision (2.1.0)</td><td>the gate now reads the documented config keys Hermes itself reads — <code>model.supports_vision</code>,
+      <code>agent.image_input_mode</code>, and a per-model <code>providers.&lt;p&gt;.models.&lt;m&gt;.supports_vision</code> override —
+      instead of only the top-level flag, and a quoted string is ignored rather than read as a boolean. It still imports no Hermes
+      internals (rule 9); a catalogue-only vision model falls back to text and the model asks with <code>image: true</code></td></tr>
+  <tr><td>Dev deps (2.1.0)</td><td><code>requirements-dev.txt</code> declares the test-only packages (pytest, Pillow, PyYAML); a fresh clone can
+      reproduce the suite without being told which module the harness imports</td></tr>
   <tr><td>Docs</td><td>2.0.2: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice), and <code>scripts/check_release.py</code> now proves tag == pin and that the shipped PDF is the recorded build; the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 
