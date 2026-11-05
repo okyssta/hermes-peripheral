@@ -121,13 +121,13 @@ Every key is on the plugin page in **Desktop → Settings → Plugins**, and in
 | `capture_enabled` | `false` | Background capture on a timer — off until you turn it on |
 | `capture_interval_seconds` | `30` | How often the background capture looks at the screen |
 | `capture_min_gap_seconds` | `15` | Never store another frame sooner than this |
-| `capture_max_per_hour` | `120` | Hard ceiling, so a video call cannot fill the disk |
+| `capture_max_per_hour` | `120` | Per-hour ceiling on background frames — a rate bound, not a size bound |
 | `show_images` | `true` | Attach the stored image to results when the model can see images |
 | `ocr_languages` | `eng` | Tesseract codes, `+`-joined (`eng+deu+fra`) |
 | `auto_scan_minutes` | `10` | Screenshot-folder rescan interval; `0` disables it |
 | `include_photos` | `false` | Index images with almost no text |
 | `max_text_chars` | `20000` | Cap on text kept per screen |
-| `retention_days` | `0` | Drop entries older than N days (`0` = keep) |
+| `retention_days` | `0` | Drop entries older than N days, files included (`0` = keep everything, no pruning) |
 | `redact` | `true` | Strip keys, tokens, private keys and card numbers before storing |
 | `thumbnails` | `true` | Keep a 360px thumbnail so a deleted screenshot still resolves |
 | `record_agent_events` | `true` | Log the agent's tool calls next to your screens |
@@ -216,10 +216,12 @@ This plugin looks at your screen, so it is built to be boring about it:
 - **No network calls at all.** No telemetry, no sync, no model API for indexing. The
   only thing that ever leaves the machine is whatever the agent chooses to quote in
   its answer.
-- **Capture is opt-in and visible.** Background capture is off until you run
-  `/peripheral watch on`. When on: changed frames only, a minimum gap, and a hard
-  per-hour ceiling. `/peripheral status` always shows whether it is on. The agent can
-  always capture on request with `screen_capture`.
+- **Capture is visible; background capture is opt-in.** The agent can call
+  `screen_capture` when it decides the current screen is the answer — that is a normal
+  tool call, it appears in the session, and it is recorded next to your screens.
+  Background capture is separate and stays off until you run `/peripheral watch on`.
+  When on: changed frames only, a minimum gap, and a per-hour rate ceiling.
+  `/peripheral status` always shows whether it is on.
 - **Redaction on by default**: API keys (`sk-`, `ghp_`, `AKIA`, `AIza`, Slack tokens),
   JWTs, bearer/basic headers, `password:`/`token:` values, credentials inside
   connection URLs (`postgres://user:***@…`), private keys, card numbers and 32+ char
@@ -229,7 +231,10 @@ This plugin looks at your screen, so it is built to be boring about it:
   deletes the row, the thumbnail, **and the frame the plugin captured**. The
   screenshots you took yourself are never touched — those are yours.
 - **You can pause**: `/peripheral pause` stops indexing and capture immediately.
-- **Retention**: `retention_days` prunes old entries (and their files) on every scan.
+- **Retention, if you want it**: `retention_days` prunes old entries (and their files)
+  on every scan. It is off by default (`0`), so out of the box disk use is
+  rate-bounded, not size-bounded — set it, or use `/peripheral forget`, to bound how
+  long anything lives.
 - **Profile-scoped**: the index lives in `<HERMES_HOME>/plugin-data/peripheral/`, one
   per profile, and dies with the plugin if you remove it.
 
@@ -241,6 +246,7 @@ This plugin looks at your screen, so it is built to be boring about it:
 uv venv .venv && uv pip install --python .venv/bin/python pytest pillow pyyaml
 .venv/bin/python -m pytest tests -q       # 48 passed
 hermes plugins validate .                 # Validation passed (security scan: safe)
+python3 scripts/check_release.py          # release tag == catalog pin == shipped dossier
 ```
 
 The tests build real PNGs with real text and run the real pipeline: indexing, ranked
@@ -273,14 +279,16 @@ python3 scripts/make_demo_video.py              # renders docs/demo.mp4 from bot
   `screen_show` can hand it the image.
 - Background capture sees the whole display: a password manager or a private tab can
   end up in a frame. It is off by default, forget one screen rather than all, and
-  `retention_days` bounds how long anything lives.
+  `retention_days` — once you set it — bounds how long anything lives.
 - HEIC needs `pillow-heif` in the host environment to be read at all; unsupported
   files are skipped, not retried forever.
 - On a headless machine there is nothing to capture; the plugin says so instead of
   failing silently, and still serves the screenshot index.
 
 MIT licensed. Disclosure for the catalog: reads image files under `watch_dirs` and
-captures the display only when the user asks or enables background capture; writes one
+captures the display when the agent calls `screen_capture` — the model may choose to,
+and every call is visible in the session and recorded in the event log — or when the
+user enables background capture; writes one
 SQLite database, WebP thumbnails and captured frames under
 `<HERMES_HOME>/plugin-data/peripheral/`; runs the local `tesseract` binary and a local
 capture binary with timeouts; makes no network calls; never modifies or deletes the

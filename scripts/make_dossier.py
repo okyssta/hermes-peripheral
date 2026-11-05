@@ -83,13 +83,29 @@ def build_html() -> str:
     facts = transcript_facts()
     tests = count_tests()
     commit = sh("git", "rev-parse", "HEAD")
-    pin = ""
+    version = ""
+    for line in (REPO / "plugin.yaml").read_text().splitlines():
+        if line.startswith("version:"):
+            version = line.split(":", 1)[1].strip().strip('"')
+            break
+    tag = f"v{version}" if version else ""
+    # The catalog pins a commit; a dossier committed into that same commit cannot name
+    # its own SHA. So it names the release tag instead, and this build refuses to run
+    # if the tag already exists and does not resolve to the pinned commit — that is
+    # what drifted twice before.
+    catalog_pin = ""
     catalog = REPO / "catalog-entry.yaml"
     if catalog.is_file():
         for line in catalog.read_text().splitlines():
             if line.startswith("sha:"):
-                pin = line.split(":", 1)[1].strip()
+                catalog_pin = line.split(":", 1)[1].strip()
                 break
+    tag_commit = sh("git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}") if tag else ""
+    if tag_commit and catalog_pin and tag_commit != catalog_pin:
+        raise SystemExit(
+            f"refusing to build: catalog pins {catalog_pin[:12]} but tag {tag} is "
+            f"{tag_commit[:12]} — run scripts/check_release.py"
+        )
     branch = sh("git", "rev-parse", "--abbrev-ref", "HEAD")
     duration = video_seconds()
     video_size = (DOCS / "demo.mp4").stat().st_size if (DOCS / "demo.mp4").is_file() else 0
@@ -163,8 +179,12 @@ def build_html() -> str:
 <div class="kicker">Hermes plugin hackathon · verification dossier</div>
 <h1>Peripheral</h1>
 <div class="sub">A memory of what was on your screen — hands-on verification, claim by claim.</div>
-<p class="lede">Version 2.0.0 · catalog pin <span class="mono">{(pin or commit)[:12]}</span> ·
-docs built from <span class="mono">{commit[:12]}</span> ({html.escape(branch)}) · {when} ·
+<p class="lede">Version {version} · catalog pins the commit tagged <span class="mono">{tag}</span>
+(<span class="mono">scripts/check_release.py</span> proves <span class="mono">git rev-parse {tag}</span>
+equals the <span class="mono">sha</span> in <span class="mono">catalog-entry.yaml</span>) ·
+docs built at <span class="mono">{commit[:12]}</span> ({html.escape(branch)}) — the tree immediately
+before this file was committed, since a PDF cannot contain the SHA of the commit that
+adds it — the tag <span class="mono">{tag}</span> names the commit that does · {when} ·
 MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
 
 <blockquote>
@@ -258,7 +278,9 @@ MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
   <tr><th>Property</th><th>How it is enforced</th></tr>
   <tr><td>Capture is opt-in</td><td><code>capture_enabled</code> defaults to <code>false</code>; the background watcher is not even constructed unless it is true</td></tr>
   <tr><td>Only changed frames are stored</td><td>dHash distance gate in <code>ingest.capture_and_ingest(force=False)</code>; a static desktop writes nothing</td></tr>
-  <tr><td>Bounded disk</td><td><code>capture_max_per_hour</code> (120), <code>capture_min_gap_seconds</code> (15), <code>retention_days</code></td></tr>
+  <tr><td>Who can start a capture</td><td>the model, by calling <code>screen_capture</code> — a normal tool call, visible in the session and written to the event log; or the user, through <code>/peripheral capture</code>. Background capture is separate and starts only when the user enables it</td></tr>
+  <tr><td>Background capture rate</td><td><code>capture_max_per_hour</code> (120) and <code>capture_min_gap_seconds</code> (15) bound how fast frames accumulate — a rate limit, not a size limit</td></tr>
+  <tr><td>Retention is opt-in</td><td><code>retention_days</code> defaults to <code>0</code> (keep everything); when set, every scan deletes older rows and their thumbnails and frames. Disk use is rate-bounded by default, size-bounded only once retention or forget is used</td></tr>
   <tr><td>Redaction at the storage boundary</td><td><code>db.record_event</code> and the OCR path apply <code>ocr.redact</code> before insert; test asserts a password never reaches the DB</td></tr>
   <tr><td>Forget means forget</td><td><code>db.forget</code> unlinks thumbnails <em>and</em> captured frames, outside the lock, after the commit; the user's own files are never unlinked</td></tr>
   <tr><td>The agent can be told to forget</td><td><code>screen_forget</code> tool, advertised in its schema</td></tr>
@@ -299,7 +321,7 @@ python3 scripts/make_dossier.py</pre>
       The transcript is a real provider session against the real handlers, not a rendered script.</li>
 </ul>
 
-<h2>8. Change log: 1.0.1 → 2.0.0</h2>
+<h2>8. Change log: 1.0.1 → {version}</h2>
 <table>
   <tr><th>Area</th><th>Change</th></tr>
   <tr><td>Capture</td><td>new <code>capture.py</code>: X11 (ffmpeg), Wayland (grim), macOS (screencapture), Windows (PowerShell), ImageMagick/scrot/maim fallbacks; argv-only, timeouts, no shell</td></tr>
@@ -309,9 +331,10 @@ python3 scripts/make_dossier.py</pre>
   <tr><td>Search</td><td>prefix fallback for OCR noise, with an honest-miss test</td></tr>
   <tr><td>Surface</td><td><code>/peripheral capture</code>, <code>/peripheral watch on|off</code>, capture readiness in status; skill rewritten</td></tr>
   <tr><td>Tests</td><td>27 → {tests}</td></tr>
+  <tr><td>Docs</td><td>2.0.1: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice); the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 
-<footer>Peripheral {sh('git', 'describe', '--tags', '--always')} · dossier generated from the repository at
+<footer>Peripheral {version} · release <span class="mono">{tag}</span> · dossier generated from the repository at
 <span class="mono">{commit}</span> · every figure in this document is read from the build, not typed.</footer>
 </body></html>
 """
@@ -345,6 +368,9 @@ def main() -> int:
         capture_output=True,
     )
     print(f"pdf: {pdf_path} ({pdf_path.stat().st_size:,} bytes)")
+    digest = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+    (DOCS / "peripheral-dossier.sha256").write_text(f"{digest}  {pdf_path.name}\n")
+    print(f"sha256: {digest}")
     return 0
 
 

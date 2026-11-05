@@ -421,7 +421,8 @@ class ScreenWatcher:
     * an interval (how often to look),
     * a change gate inside :func:`capture_and_ingest` (a static desktop stores
       nothing), and
-    * a per-hour ceiling, so a video call or a game cannot fill the disk.
+    * a per-hour ceiling on how fast frames accumulate (a rate limit, not a size
+      limit: retention is a separate setting and is off by default).
 
     Every failure is swallowed: a watcher that throws would take the gateway with
     it, and a missing capture binary is a normal state, not an error.

@@ -1,6 +1,6 @@
 name: peripheral
 label: Peripheral
-version: 2.0.0
+version: 2.0.1
 manifest_version: 2
 api_version: 1
 license: MIT
@@ -60,7 +60,8 @@ config_schema:
     type: int
     default: 120
     label: Maximum frames per hour
-    description: A hard ceiling so a video call or a game cannot fill the disk
+    description: A per-hour ceiling on background frames. It bounds how fast frames
+      accumulate, not how long they live — set retention_days for that
   show_images:
     type: bool
     default: true
@@ -106,7 +107,8 @@ config_schema:
     default: 0
     label: Retention (days)
     description: >-
-      Drop entries older than this on every scan. 0 keeps everything
+      Drop entries older than this on every scan, deleting their thumbnails and
+      captured frames too. 0 keeps everything: no automatic pruning
   redact:
     type: bool
     default: true
