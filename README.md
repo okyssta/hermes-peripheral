@@ -62,7 +62,7 @@ prove the demand; neither is a Hermes plugin, and neither gives the agent tools.
 ## Install
 
 ```bash
-hermes plugins install kyssta-exe/hermes-peripheral --enable
+hermes plugins install okyssta/hermes-peripheral --enable
 ```
 
 That is the whole setup if your screenshots land in the usual place — the plugin
