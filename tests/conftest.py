@@ -18,9 +18,25 @@ HERMES_SRC = Path(os.environ.get("HERMES_SRC", "/root/.hermes/hermes-agent"))
 
 
 def pytest_configure(config):
-    for path in (str(REPO_ROOT.parent), str(HERMES_SRC)):
+    for path in (str(REPO_ROOT.parent), str(HERMES_SRC), str(REPO_ROOT / "tests")):
         if path not in sys.path:
             sys.path.insert(0, path)
+    # A checkout can be named anything (`hermes-peripheral`, `verify-922b`, …); the
+    # package must still import as `peripheral`, because that is the name the plugin
+    # host, the tests and the relative imports all use. A one-entry symlink directory
+    # is used instead of a hand-built module spec so pytest's own import machinery
+    # behaves exactly as it does in a normally named checkout.
+    if REPO_ROOT.name != "peripheral" and "peripheral" not in sys.modules:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "peripheral", REPO_ROOT / "__init__.py",
+            submodule_search_locations=[str(REPO_ROOT)],
+        )
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            sys.modules["peripheral"] = module
+            spec.loader.exec_module(module)
 
 
 @pytest.fixture()

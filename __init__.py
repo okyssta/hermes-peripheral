@@ -26,8 +26,23 @@ calls, reads no credentials, and never modifies or deletes the user's images.
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Any
+
+# A checkout directory is often not a valid Python package name (`hermes-peripheral`),
+# and pytest imports this file as a bare module when the plugin root is not itself
+# importable. Re-home the module under its real name so the relative imports below
+# resolve identically in the plugin host, in `pytest`, and in an ad-hoc script.
+if __package__ in (None, ""):
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    _PARENT = os.path.dirname(_HERE)
+    if _PARENT not in sys.path:
+        sys.path.append(_PARENT)
+    __path__ = [_HERE]  # type: ignore[assignment]
+    __package__ = "peripheral"
+    sys.modules.setdefault("peripheral", sys.modules[__name__])
 
 from . import capture, commands, db, ingest, ocr, render, schemas, tools
 from .settings import PLUGIN_ID, SCHEMA_KEYS, Settings
