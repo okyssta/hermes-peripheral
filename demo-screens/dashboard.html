@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Acme — Production dashboard</title>
+<style>
+ body{margin:0;font-family:-apple-system,"Segoe UI",Inter,sans-serif;background:#0b1020;color:#e8ecf5;}
+ .bar{padding:20px 40px;border-bottom:1px solid #1e2740;font-size:20px;font-weight:600}
+ .bar span{color:#7c8ab0;font-weight:400;font-size:14px;margin-left:12px}
+ .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;padding:40px}
+ .card{background:#131a2e;border:1px solid #1e2740;border-radius:14px;padding:22px 24px}
+ .k{color:#8b9ac0;font-size:14px;letter-spacing:.4px;text-transform:uppercase}
+ .v{font-size:38px;font-weight:700;margin-top:8px}
+ .d{font-size:14px;margin-top:6px;color:#4ade80}
+ .d.bad{color:#f87171}
+ .wide{grid-column:span 2}
+ table{width:100%;border-collapse:collapse;font-size:15px;margin-top:14px}
+ td,th{text-align:left;padding:9px 4px;border-bottom:1px solid #1c2440;color:#c8d2ea}
+ th{color:#7c8ab0;font-weight:600;font-size:13px;text-transform:uppercase}
+ .pill{background:#3b1d22;color:#f87171;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700}
+ .ok{background:#12301f;color:#4ade80}
+</style></head>
+<body>
+<div class="bar">Acme Robotics — Production <span>last 24 hours · eu-west-1</span></div>
+<div class="grid">
+  <div class="card"><div class="k">Requests</div><div class="v">4.28M</div><div class="d">+ 12.4% vs yesterday</div></div>
+  <div class="card"><div class="k">Error rate</div><div class="v">1.9%</div><div class="d bad">+ 0.7 pts · 402 spike</div></div>
+  <div class="card"><div class="k">p99 latency</div><div class="v">412 ms</div><div class="d">− 38 ms</div></div>
+  <div class="card"><div class="k">Active customers</div><div class="v">1,284</div><div class="d">+ 61 this week</div></div>
+  <div class="card wide"><div class="k">Top failing endpoint</div>
+    <table><tr><th>Route</th><th>Status</th><th>Count</th></tr>
+    <tr><td>/v1/checkout/pay</td><td><span class="pill">402 card_declined</span></td><td>18,402</td></tr>
+    <tr><td>/v1/invoices/:id</td><td><span class="pill">500 timeout</span></td><td>1,209</td></tr>
+    <tr><td>/v1/customers</td><td><span class="pill ok">200 healthy</span></td><td>402,118</td></tr></table></div>
+  <div class="card wide"><div class="k">Recent deploys</div>
+    <table><tr><th>Service</th><th>Version</th><th>Env</th></tr>
+    <tr><td>checkout-api</td><td>a91f3c2</td><td>staging</td></tr>
+    <tr><td>ledger</td><td>7d2c110</td><td>production</td></tr></table></div>
+</div>
+</body></html>
