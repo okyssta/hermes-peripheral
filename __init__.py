@@ -29,13 +29,14 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from . import commands, db, ingest, ocr, render, schemas, tools
+from . import capture, commands, db, ingest, ocr, render, schemas, tools
 from .settings import PLUGIN_ID, SCHEMA_KEYS, Settings
 
 logger = logging.getLogger(__name__)
 
 _CTX: Any = None
 _SCANNER: ingest.AutoScanner | None = None
+_WATCHER: ingest.ScreenWatcher | None = None
 _CACHED: Settings | None = None
 _CACHED_AT = 0.0
 _CACHE_SECONDS = 2.0
@@ -119,6 +120,8 @@ def register(ctx: Any) -> None:
         "screen_timeline": tools.screen_timeline,
         "screen_show": tools.screen_show,
         "screen_index": tools.screen_index,
+        "screen_capture": tools.screen_capture,
+        "screen_forget": tools.screen_forget,
     }
     for schema in schemas.ALL:
         ctx.register_tool(
@@ -143,10 +146,19 @@ def register(ctx: Any) -> None:
         _SCANNER = ingest.AutoScanner(current_settings)
         _SCANNER.start(settings.auto_scan_minutes)
 
+    if settings.enabled and settings.capture_enabled:
+        _WATCHER = ingest.ScreenWatcher(current_settings)
+        _WATCHER.start(
+            settings.capture_interval_seconds,
+            settings.capture_min_gap_seconds,
+            settings.capture_max_per_hour,
+        )
+
     logger.info(
-        "peripheral ready: %s folders, ocr=%s",
+        "peripheral ready: %s folders, ocr=%s, capture=%s",
         len(settings.watch_dirs),
         "yes" if ocr.available() else "no",
+        capture.describe(),
     )
 
 

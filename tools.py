@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from . import db, ingest, render
+from . import db, images, ingest, ocr, render
 from .settings import Settings
 
 _LAZY_LOCK = threading.Lock()
@@ -28,6 +28,66 @@ def get_settings() -> Settings:
     from . import current_settings
 
     return current_settings()
+
+
+def vision_attached() -> bool:
+    """True when the user has declared that the active model accepts images.
+
+    Only public surfaces are used: ``model.supports_vision`` in ``config.yaml`` is
+    the documented way to state a model's capability, and it is opt-in. When it is
+    absent the answer is False — a text-only result is always valid, a stray image
+    block is not. A model that knows it can see may still ask for the image
+    explicitly with ``image: true``.
+    """
+    try:
+        from hermes_cli.config import load_config_readonly
+
+        config = load_config_readonly() or {}
+        model = config.get("model")
+        if isinstance(model, dict):
+            declared = model.get("supports_vision", model.get("vision"))
+            if isinstance(declared, bool):
+                return declared
+    except Exception:
+        return False
+    return False
+
+
+def _image_part(shot, text: str, *, want: bool | None) -> str | dict:
+    """Attach the stored screen to the text result when it is useful and safe.
+
+    ``want`` is tri-state: True (attach), False (text only), None (ask the config).
+    """
+    settings = get_settings()
+    if not settings.show_images:
+        return text
+    if want is None:
+        want = vision_attached()
+    if not want:
+        return text
+    candidates = [shot.path, shot.thumb_path]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if not os.path.isfile(candidate):
+            continue
+        payload = images.data_url(candidate)
+        if not payload:
+            continue
+        note = (
+            "\n\nThe screen itself is attached to this result — you can see it. "
+            "Use the layout and any text the OCR missed; quote what matters."
+        )
+        return {
+            "_multimodal": True,
+            "text_summary": text + note,
+            "meta": {"shot_id": shot.id, "image_path": candidate, "native_vision": True},
+            "content": [
+                {"type": "text", "text": text + note},
+                {"type": "image_url", "image_url": {"url": payload}},
+            ],
+        }
+    return text
 
 
 def lazy_scan(settings: Settings, *, batch: int = 12) -> None:
@@ -128,9 +188,17 @@ def screen_recall(args: dict | None = None, **kwargs: Any) -> str:
     except Exception as exc:  # pragma: no cover - defensive: a tool must answer
         return f"Error: screen search failed ({exc}). Try /peripheral scan, then retry."
     total = db.stats()["count"]
-    if not shots and settings.ocr_languages and not db.stats()["chars"]:
+    if not shots and not db.stats()["chars"]:
+        if not ocr.available():
+            return render.results(query, shots) + (
+                "\n\nThe index holds no text because OCR is not installed on this machine. "
+                "Screens are still recorded and can be looked at with screen_timeline / "
+                "screen_show. Install tesseract to make text search work "
+                "(macOS: brew install tesseract; Debian/Ubuntu: apt install tesseract-ocr)."
+            )
         return render.results(query, shots) + (
-            "\n\nThe index holds no text yet: nothing has been OCR'd. Check /peripheral "
+            "\n\nThe index holds no text yet: nothing has been captured or OCR'd. "
+            "Call screen_capture to remember what is on screen now, or check /peripheral "
             "for the OCR engine status."
         )
     return render.results(query, shots, total=total)
@@ -151,17 +219,85 @@ def screen_timeline(args: dict | None = None, **kwargs: Any) -> str:
     return render.timeline(shots, events, title=label)
 
 
-def screen_show(args: dict | None = None, **kwargs: Any) -> str:
+def screen_show(args: dict | None = None, **kwargs: Any) -> str | dict:
     data = args or {}
     try:
-        shot_id = int(data.get("id"))
+        shot_id = int(data.get("id") or 0)
     except (TypeError, ValueError):
         return "Error: screen_show needs the numeric id shown as [#id]."
     shot = db.get(shot_id)
     if shot is None:
         return f"No screen with id {shot_id}. Use screen_recall or screen_timeline to find one."
     chars = _int(data.get("chars"), 6000, 200, 40000)
-    return render.record(shot, body_chars=chars)
+    want_image = data.get("image")
+    return _image_part(
+        shot, render.record(shot, body_chars=chars),
+        want=None if want_image is None else bool(want_image),
+    )
+
+
+def screen_capture(args: dict | None = None, **kwargs: Any) -> str | dict:
+    """Grab the screen now, index it, and hand it back."""
+    data = args or {}
+    settings = get_settings()
+    if not settings.enabled:
+        return (
+            "Peripheral is paused, so this screen was not captured. "
+            "Resume with /peripheral resume."
+        )
+    note = str(data.get("note") or "").strip()[:120]
+    want_image = data.get("image")
+    outcome = ingest.capture_and_ingest(settings, force=True)
+    if not outcome.ok:
+        return (
+            f"No screen was captured. {outcome.detail or outcome.reason}.\n"
+            "Peripheral still answers from the screenshots it has indexed; "
+            "/peripheral status shows whether capture is available on this machine."
+        )
+    shot = db.get(outcome.shot_id) if outcome.shot_id else None
+    header = outcome.line()
+    if shot is None:
+        return header
+    if note:
+        # The note is the user's own words for why this screen matters: store it
+        # as the title so a later search or timeline row reads the way they said it.
+        db.set_title(shot.id, note)
+        shot = db.get(shot.id) or shot
+        header = f"{header} · note: {note}"
+    return _image_part(
+        shot, f"{header}\n\n{render.record(shot)}",
+        want=None if want_image is None else bool(want_image),
+    )
+
+
+def screen_forget(args: dict | None = None, **kwargs: Any) -> str:
+    """Delete screens the user asked to forget (rows, thumbnails and owned frames)."""
+    data = args or {}
+    if data.get("all"):
+        removed = db.forget(None)
+        return (
+            f"Forgotten: {removed} screen{'s' if removed != 1 else ''} removed from the index, "
+            "with every thumbnail and captured frame this plugin wrote. Your own screenshot "
+            "files were not touched."
+        )
+    if data.get("id") is None:
+        return "Error: screen_forget needs an id, or all=true to clear the whole index."
+    try:
+        shot_id = int(data.get("id"))
+    except (TypeError, ValueError):
+        return "Error: screen_forget needs the numeric id shown as [#id]."
+    shot = db.get(shot_id)
+    if shot is None:
+        return f"No screen with id {shot_id} — nothing to forget."
+    removed = db.forget(shot_id)
+    if not removed:
+        return f"Screen #{shot_id} could not be removed."
+    if shot.source == "capture":
+        return f"Forgotten: screen #{shot_id} and the frame Peripheral captured for it are deleted."
+    return (
+        f"Forgotten: screen #{shot_id} is out of the index, with the thumbnail this plugin "
+        "wrote for it. The original screenshot file is untouched."
+    )
 
 
 def screen_index(args: dict | None = None, **kwargs: Any) -> str:

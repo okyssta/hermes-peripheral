@@ -11,12 +11,12 @@ from __future__ import annotations
 SCREEN_RECALL = {
     "name": "screen_recall",
     "description": (
-        "Search the user's own screen history — every screenshot on this machine, indexed "
-        "locally with OCR. Use it whenever the user refers to something they SAW rather than "
-        "something they typed: 'that error I got yesterday', 'the pricing page', 'the message "
-        "from Sam', 'what was on my screen when it broke'. Returns the matching screens with "
-        "the time, the visible text around the match, and the image path. Prefer this over "
-        "asking the user to re-send a screenshot."
+        "Search the user's own screen history — screenshots on this machine plus any screens "
+        "Peripheral captured itself, all indexed locally with OCR. Use it whenever the user refers "
+        "to something they SAW rather than something they typed: 'that error I got yesterday', "
+        "'the pricing page', 'the message from Sam', 'what was on my screen when it broke'. Returns "
+        "the matching screens with the time, the visible text around the match, and the image path. "
+        "Prefer this over asking the user to re-send a screenshot."
     ),
     "parameters": {
         "type": "object",
@@ -61,17 +61,66 @@ SCREEN_TIMELINE = {
 SCREEN_SHOW = {
     "name": "screen_show",
     "description": (
-        "Open one screen from the index by id: its full OCR text, capture time and the path to "
-        "the image. Use it after screen_recall when the snippet is not enough, or call it and "
-        "then look at the returned path with a vision tool when the meaning is in the layout."
+        "Open one screen from the index by id: its full OCR text, capture time and the stored "
+        "image. Use it after screen_recall when the snippet is not enough. If the active model can "
+        "see images, the screen itself is attached to the result — so a chart, a photo or a dialog "
+        "whose meaning is in the layout is answerable even though the original is gone."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "id": {"type": "integer", "description": "The [#id] shown by screen_recall / screen_timeline."},
             "chars": {"type": "integer", "description": "How much of the text to return (default 6000)."},
+            "image": {
+                "type": "boolean",
+                "description": "Attach the stored image. Omit to follow the model's declared vision support; set true only when you can see images.",
+            },
         },
         "required": ["id"],
+    },
+}
+
+SCREEN_CAPTURE = {
+    "name": "screen_capture",
+    "description": (
+        "Capture the user's screen right now and remember it. Use when the user says 'look at my "
+        "screen', 'what does this say', 'remember this', or asks about something currently on "
+        "screen: the frame is read locally, indexed with its time, and — when the model supports "
+        "vision — attached to the result so you can see it directly. No screenshot file, no "
+        "clipboard, no user action required. Works on X11, Wayland, macOS and Windows; reports "
+        "plainly when the machine has no display to capture."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "note": {
+                "type": "string",
+                "description": "Optional short label for why this screen matters, e.g. 'checkout error'.",
+            },
+            "image": {
+                "type": "boolean",
+                "description": "Attach the captured image. Omit to follow the model's declared vision support; set true only when you can see images.",
+            },
+        },
+        "required": [],
+    },
+}
+
+SCREEN_FORGET = {
+    "name": "screen_forget",
+    "description": (
+        "Delete screens from the memory. Use it when the user says 'forget that', 'delete that "
+        "screen', 'don't keep this' or asks for privacy cleanup. Removes the index row, the "
+        "thumbnail, and the image file for screens Peripheral captured itself. The user's own "
+        "screenshot files are never deleted. Pass an id for one screen, or all=true for everything."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer", "description": "The [#id] to forget."},
+            "all": {"type": "boolean", "description": "Forget every indexed screen."},
+        },
+        "required": [],
     },
 }
 
@@ -96,4 +145,4 @@ SCREEN_INDEX = {
     },
 }
 
-ALL = (SCREEN_RECALL, SCREEN_TIMELINE, SCREEN_SHOW, SCREEN_INDEX)
+ALL = (SCREEN_RECALL, SCREEN_TIMELINE, SCREEN_SHOW, SCREEN_INDEX, SCREEN_CAPTURE, SCREEN_FORGET)

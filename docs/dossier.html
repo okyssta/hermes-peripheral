@@ -1,162 +1,221 @@
 <!doctype html>
-<html><head><meta charset="utf-8">
-<title>Peripheral — verification dossier</title>
+<html><head><meta charset="utf-8"><title>Peripheral — verification dossier</title>
 <style>
-  @page { size: A4; margin: 15mm 14mm; }
-  body { font-family: "DejaVu Sans", -apple-system, Segoe UI, sans-serif; color:#15181d; font-size:9.8pt; line-height:1.4; }
-  h1 { font-size:20pt; margin:0 0 2mm; letter-spacing:-0.3px; }
-  h2 { font-size:12pt; margin:7mm 0 2mm; padding-bottom:1.2mm; border-bottom:1.2px solid #15181d; }
-  h3 { font-size:10.5pt; margin:4mm 0 1mm; }
-  .sub { color:#555c66; font-size:10pt; margin:0 0 5mm; }
-  code, .mono { font-family:"DejaVu Sans Mono", monospace; font-size:8.8pt; }
-  table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; }
-  tr { break-inside: avoid; }
-  th { text-align:left; font-size:8.8pt; text-transform:uppercase; letter-spacing:.4px; color:#555c66; border-bottom:1px solid #c9ced6; padding:1.4mm 2mm; }
-  td { vertical-align:top; padding:1.3mm 2mm; border-bottom:1px solid #e6e9ee; font-size:8.8pt; line-height:1.34; overflow-wrap: break-word; }
-  .tag { display:inline-block; font-family:"DejaVu Sans Mono",monospace; font-size:7.6pt; padding:0.3mm 1.4mm; border-radius:2px; border:1px solid; }
-  .dem { color:#0b6b3a; border-color:#0b6b3a; }
-  .neg { color:#9b1c1c; border-color:#9b1c1c; }
-  .hyp { color:#7a4d00; border-color:#7a4d00; }
-  .pln { color:#2b4a8b; border-color:#2b4a8b; }
-  pre { background:#f4f6f8; border-left:2.5px solid #15181d; padding:2.5mm 3mm; font-family:"DejaVu Sans Mono",monospace; font-size:8.4pt; white-space:pre-wrap; margin:2mm 0 3mm; }
-  ul { margin:1mm 0 2mm 4mm; padding:0; }
-  li { margin:0.8mm 0; }
-  .row { display:flex; gap:6mm; }
-  .row > div { flex:1; }
-  a { color:#15181d; }
-  .foot { margin-top:6mm; border-top:1px solid #c9ced6; padding-top:2mm; color:#555c66; font-size:8.6pt; }
-</style></head><body>
+  @page { size: A4; margin: 16mm 15mm; }
+  :root { color-scheme: light; }
+  body { font-family: "DejaVu Sans", -apple-system, "Segoe UI", sans-serif; color:#141a24;
+          font-size: 10.5pt; line-height: 1.5; margin:0; }
+  h1 { font-size: 30pt; margin:0 0 4px; letter-spacing:-.5px; }
+  h2 { font-size: 15pt; margin: 26px 0 8px; border-bottom:2px solid #141a24; padding-bottom:4px; }
+  h3 { font-size: 11.5pt; margin: 16px 0 4px; }
+  p { margin: 6px 0; }
+  .sub { color:#4a5568; font-size: 11pt; }
+  .lede { font-size: 12pt; margin: 12px 0 4px; }
+  code, .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 8.8pt; }
+  .small { font-size: 8pt; color:#39424f; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; }
+  th, td { border-bottom: 1px solid #d8dee8; padding: 5px 6px; text-align: left; vertical-align: top; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  th { background:#f2f5fa; font-size: 8.6pt; text-transform: uppercase; letter-spacing:.4px; }
+  td:first-child { max-width: 210px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tag { display:inline-block; padding:2px 7px; border-radius:999px; font-size:7.8pt;
+          font-weight:700; letter-spacing:.4px; text-transform:uppercase; }
+  .ok { background:#dcfce7; color:#166534; }
+  .neg { background:#fee2e2; color:#991b1b; }
+  .hyp { background:#fef3c7; color:#92400e; }
+  .plan { background:#e0e7ff; color:#3730a3; }
+  blockquote { margin: 8px 0; padding: 10px 14px; background:#f7f9fc; border-left: 4px solid #635bff; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border:1px solid #d8dee8; border-radius:8px; padding:10px 12px; }
+  .kicker { font-size:8.4pt; letter-spacing:1px; text-transform:uppercase; color:#635bff; font-weight:700; }
+  footer { margin-top: 26px; border-top:1px solid #d8dee8; padding-top:8px; color:#4a5568; font-size:8.6pt; }
+  .avoid { page-break-inside: avoid; }
+</style></head>
+<body>
 
-<h1>Peripheral — a memory of what you've seen on screen</h1>
-<p class="sub">Hermes Agent Plugin Hackathon entry · dossier for verification · 5 Nov 2026 · <span class="mono">okyssta/hermes-peripheral</span> v1.0.1</p>
+<div class="kicker">Hermes plugin hackathon · verification dossier</div>
+<h1>Peripheral</h1>
+<div class="sub">A memory of what was on your screen — hands-on verification, claim by claim.</div>
+<p class="lede">Version 2.0.0 · commit <span class="mono">77b55d76575c</span> (master) ·
+docs built 2026-11-05 17:24 UTC · MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
 
-<h2>1. The entry in one paragraph</h2>
-<p>Hermes can read a file you hand it and can look at the screen <i>now</i>. It cannot answer for a screen that is
-already gone — <i>“that error I got yesterday”</i>, <i>“the price on that page”</i>, <i>“what was on screen when it
-broke”</i>. Peripheral indexes the screenshots the OS already writes, reads them locally with Tesseract, and gives
-the agent four tools: <span class="mono">screen_recall</span>, <span class="mono">screen_timeline</span>,
-<span class="mono">screen_show</span>, <span class="mono">screen_index</span> — plus a <span class="mono">/peripheral</span>
-command and a bundled skill. The timeline puts the user's screens and the agent's own tool calls on one clock.
-Local only: no network calls, no capture daemon, secrets redacted at ingest — in the OCR text and in the
-agent-event log alike. <span class="mono">/peripheral forget</span> deletes the row and the thumbnail this plugin
-wrote for it; your screenshots are never touched.</p>
+<blockquote>
+  <strong>The claim.</strong> Hermes can look at the screen right now; it cannot answer for a screen
+  that is already gone. Peripheral captures the screen itself, reads it locally, stores it with the
+  time it appeared, and gives the agent six tools to search it, open it — as text and as the image —
+  and forget it. No cloud, no account, no API key for indexing.
+</blockquote>
+
+<h2>1. What ships</h2>
+<table>
+  <tr><th>Surface</th><th>What it is</th></tr>
+  <tr><td class='mono'>capture.py</td><td>capture backends, argv construction, timeouts</td></tr>
+<tr><td class='mono'>ingest.py</td><td>scan, change gate, capture-and-ingest</td></tr>
+<tr><td class='mono'>db.py</td><td>SQLite/FTS5, forget (rows + files), prefix fallback</td></tr>
+<tr><td class='mono'>tools.py</td><td>six tool handlers, multimodal envelope</td></tr>
+<tr><td class='mono'>commands.py</td><td>/peripheral surface</td></tr>
+<tr><td class='mono'>schemas.py</td><td>tool schemas the model sees</td></tr>
+<tr><td class='mono'>settings.py</td><td>config resolution</td></tr>
+<tr><td class='mono'>render.py</td><td>results, timeline, status</td></tr>
+  <tr><td class="mono">skills/peripheral</td><td>bundled skill: when to reach for screen memory, and the honesty rules for quoting OCR</td></tr>
+</table>
+
+<h3>Tools the model sees</h3>
+<table>
+  <tr><th>Tool</th><th>Behaviour</th></tr>
+  <tr><td class="mono">screen_capture(note, image)</td><td>photograph the display now, index it, hand it back; reports the backend and timing</td></tr>
+  <tr><td class="mono">screen_recall(query, since, until, limit)</td><td>BM25 over OCR text, re-ranked by recency and richness; prefix fallback for OCR noise</td></tr>
+  <tr><td class="mono">screen_timeline(since, until, limit)</td><td>screens and the agent's own tool calls interleaved on one clock</td></tr>
+  <tr><td class="mono">screen_show(id, chars, image)</td><td>one screen's full text, plus the image attached when the model accepts images</td></tr>
+  <tr><td class="mono">screen_index(paths, batch)</td><td>index explicit files/folders, bounded batch</td></tr>
+  <tr><td class="mono">screen_forget(id, all)</td><td>delete rows, thumbnails and captured frames; never the user's own screenshots</td></tr>
+</table>
 
 <h2>2. Claim ledger</h2>
+<p>Each line says what kind of evidence backs it. Nothing in this document is upgraded past its label.</p>
 <table>
-  <tr><th style="width:22mm">Status</th><th>Claim</th><th style="width:62mm">Evidence</th></tr>
-  <tr><td><span class="tag dem">demonstrated</span></td>
-      <td>The pipeline indexes real screenshots and finds the screen that answers a natural question.</td>
-      <td>10 real 1440×900 pages (5 captured live from Stripe/GitHub/AWS/HN/Python docs, 5 rendered local apps) → 10.3 s, 12,616 chars stored, 1.3 MB of source images; query <span class="mono">"card error"</span> returns screen #8 and the line <i>“The card has expired. Check the expiration date or use a different card.”</i> A warm rescan re-reads zero images.</td></tr>
-  <tr><td><span class="tag dem">demonstrated</span></td>
-      <td>The model reaches for the tools unprompted and quotes them correctly.</td>
-      <td>Captured session (<span class="mono">docs/demo-transcript.txt/.json</span>): <span class="mono">deepseek-v4.1-flash</span>, given the four tool schemas and only <i>“what was that card error I saw on Monday morning?”</i>, chose 5 calls in 27.4 s — <span class="mono">screen_recall(card error)</span>, <span class="mono">screen_recall(card declined)</span>, <span class="mono">screen_show(8)</span>, <span class="mono">screen_timeline(2026-11-02)</span>, <span class="mono">screen_show(9)</span> — and answered with <span class="mono">expired card</span>, its quoted sentence, and the note that the other Monday screens were a Slack thread and a pytest run. The video renders this scene from the transcript.</td></tr>
-  <tr><td><span class="tag dem">demonstrated</span></td>
-      <td>Admissible by the catalog's own gate.</td>
-      <td><span class="mono">hermes plugins validate</span> at the pinned code commit <span class="mono">25342ff</span>: manifest, config schema, capability probe, declared tools/hooks match, security scan <b>safe</b>, no core override. <b>27/27</b> tests, including forget-removes-thumbnail, event-detail redaction and the <span class="mono">before</span> bound.</td></tr>
-  <tr><td><span class="tag dem">demonstrated</span></td>
-      <td>No catalog entry, no repo in the competition wave, and no community-directory entry does screen history.</td>
-      <td>978 catalog entries parsed; nearest are <span class="mono">mediarag</span>, <span class="mono">document-reader</span>, <span class="mono">source-tray</span>, <span class="mono">modlens</span>, <span class="mono">hermes-time-machine</span> — each differing in mechanism (§4). 480-repo wave (since 1 Sep) grepped for screen/screenshot/recall/timeline.</td></tr>
-  <tr><td><span class="tag neg">negative</span></td>
-      <td>The in-gateway chat demo could not be recorded on this host.</td>
-      <td><span class="mono">hermes chat -q</span> fails with <span class="mono">invalid_params</span> for <i>new</i> sessions regardless of this plugin — reproduced with the plugin disabled, on a slash command, and on a second profile. The four tool schemas were verified separately against the provider (HTTP 200, correct tool selection), and the plugin loads/registers under the real loader.</td></tr>
-  <tr><td><span class="tag hyp">hypothesis</span></td>
-      <td>“Useful for ~90% of users.”</td>
-      <td>Every screenshot-taker has this question; screenshots are a default OS behaviour (macOS Desktop, Windows Snipping Tool, Linux folders) and the plugin also indexes images the user sends the agent. Users who never screenshot get nothing until they do — that is the honest limit of the claim.</td></tr>
-  <tr><td><span class="tag pln">planned</span></td>
-      <td>Submission steps 2–3.</td>
-      <td>X post tagging <span class="mono">@NousResearch</span> and the Typeform — both need your account; copy is ready on request. Catalog PR is open (step 1 done).</td></tr>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>The plugin captures a real display and indexes what it captured</td><td><span class="tag ok">demonstrated</span></td>
+      <td>three real browser pages on Xvfb :99, captured via <code>ffmpeg x11grab</code> in 1.2 s / 0.9 s / 1.5 s,
+      679 / 465 / 428 characters of OCR text; frames are in the demo video and re-generated by <code>scripts/demo_capture.py</code></td></tr>
+  <tr><td>The model chooses the tools itself and answers from the memory</td><td><span class="tag ok">demonstrated</span></td>
+      <td>6 tool calls, 18.79 s, model <code>deepseek-v4.1-flash</code>;
+      full transcript committed at <code>docs/demo-transcript.txt</code></td></tr>
+  <tr><td>Screens survive the window closing; a text query finds them</td><td><span class="tag ok">demonstrated</span></td>
+      <td>the demo's first screen was captured, then the browser was closed and replaced twice; <code>screen_recall("card declined")</code> still returned it, and all three screens matched a single question</td></tr>
+  <tr><td>Forget removes the pixels, not just the row</td><td><span class="tag ok">demonstrated</span></td>
+      <td><code>test_forget_deletes_a_captured_frame_and_spares_a_user_screenshot</code>, <code>test_forget_all_clears_captured_frames_and_keeps_user_files</code>; live probe in the transcript of the forget run</td></tr>
+  <tr><td>Works without Tesseract (visual index)</td><td><span class="tag ok">demonstrated</span></td>
+      <td><code>test_a_machine_without_ocr_still_builds_a_visual_index</code> — image stored, timeline lists it, marked <code>no text</code></td></tr>
+  <tr><td>No network calls, no telemetry</td><td><span class="tag ok">demonstrated</span></td>
+      <td>no HTTP client imported anywhere in the plugin; <code>hermes plugins validate</code> security scan: safe; only local subprocesses (tesseract, capture binary)</td></tr>
+  <tr><td>Useful to ~90% of Hermes users</td><td><span class="tag hyp">hypothesis</span></td>
+      <td>true for anyone with a display (capture works with no screenshot habit) or a screenshot folder; a headless user with neither gets nothing until they add a folder — stated, not hidden</td></tr>
+  <tr><td>Native image attachment in tool results</td><td><span class="tag ok">demonstrated (envelope)</span></td>
+      <td>envelope shape asserted by <code>test_screen_show_attaches_the_image_when_the_model_can_see</code>;
+      the shipped default requires the model's declared vision support, so a text-only model gets text — no provider error</td></tr>
+  <tr><td>A live end-to-end agent turn through the Hermes gateway</td><td><span class="tag neg">negative</span></td>
+      <td><code>hermes chat -q</code> on this host rejects new sessions with <code>invalid_params</code> for any prompt, with the plugin disabled and on a second profile — independent of Peripheral.
+      The demo therefore drives the same handlers through the provider's tool-calling API and commits the transcript</td></tr>
+  <tr><td>Capture on a headless server</td><td><span class="tag neg">negative</span></td>
+      <td>there is no display to photograph; <code>screen_capture</code> returns the reason and <code>/peripheral status</code> reports no backend. The screenshot index still works</td></tr>
+  <tr><td>Cross-platform capture (Wayland, macOS, Windows)</td><td><span class="tag plan">implemented, unverified here</span></td>
+      <td>argv construction is unit-tested (<code>test_x11_capture_is_an_argv_list_and_never_a_shell_string</code>,
+      <code>test_missing_binary_means_no_command</code>); only the X11/ffmpeg path could be executed on this machine</td></tr>
 </table>
 
-<h2>3. What was built</h2>
-<div class="row">
-<div>
-<h3>Surfaces</h3>
-<ul>
-  <li>4 tools (toolset <span class="mono">peripheral</span>), 1 slash command, 1 observer hook (<span class="mono">post_tool_call</span>), 1 skill</li>
-  <li>Settings in <span class="mono">plugin.yaml</span> render in Desktop → Settings → Plugins</li>
-  <li>State in <span class="mono">&lt;HERMES_HOME&gt;/plugin-data/peripheral/</span> via the documented storage API</li>
-</ul>
-<h3>Mechanics</h3>
-<ul>
-  <li>Incremental scan by mtime+size+SHA-256; near-duplicates dropped at Hamming ≤ 3 on a 64-bit dHash</li>
-  <li>Tesseract as one bounded subprocess (25 s cap, one thread); no OCR ⇒ visual index instead of failure</li>
-  <li>SQLite FTS5 (porter) + BM25, re-ranked by recency and text richness; query sanitised into quoted prefix terms</li>
-  <li>Evidence snippet re-chosen from the stored text — the line with the most query terms, windowed around them</li>
-  <li>Redaction: <span class="mono">sk-</span>/<span class="mono">ghp_</span>/<span class="mono">AKIA</span>/<span class="mono">AIza</span>/Slack, JWT, bearer/basic, <span class="mono">password:</span>, credentials in connection URLs, private keys, card numbers, 32+ hex — applied to OCR text and to stored agent-event details</li>
-</ul>
+<h2>3. The session behind the demo</h2>
+<p><strong>Question:</strong> I got a card error a little while ago — what did it actually say? And was anyone else talking about it?</p>
+<table>
+  <tr><th>Tool</th><th>Arguments chosen by the model</th><th class="num">Result chars</th></tr>
+  <tr><td class='mono'>screen_recall</td><td class='mono small'>{&quot;query&quot;: &quot;card declined&quot;, &quot;since&quot;: &quot;today&quot;, &quot;limit&quot;: 15}</td><td class='num'>1,308</td></tr>
+<tr><td class='mono'>screen_recall</td><td class='mono small'>{&quot;query&quot;: &quot;card error&quot;, &quot;limit&quot;: 15}</td><td class='num'>933</td></tr>
+<tr><td class='mono'>screen_recall</td><td class='mono small'>{&quot;query&quot;: &quot;payment failed&quot;, &quot;limit&quot;: 15}</td><td class='num'>957</td></tr>
+<tr><td class='mono'>screen_show</td><td class='mono small'>{&quot;id&quot;: 1}</td><td class='num'>1,091</td></tr>
+<tr><td class='mono'>screen_show</td><td class='mono small'>{&quot;id&quot;: 2}</td><td class='num'>881</td></tr>
+<tr><td class='mono'>screen_show</td><td class='mono small'>{&quot;id&quot;: 3}</td><td class='num'>841</td></tr>
+</table>
+<p class="small">Index at the time: 3 screens (3 captured live), 1,572 chars of OCR text · capture: ready (x11-ffmpeg) · captured 2026-11-05T17:07:14Z</p>
+<h3>The answer it produced (verbatim, trimmed here for the page)</h3>
+<blockquote class="small">Here&#x27;s what was on screen:
+
+**The error itself** (17:06, a Stripe checkout page in TEST MODE):
+
+&gt; **Payment failed** — The charge for invoice INV-2048 was not completed.
+&gt; **Your card was declined** — The card has expired. Check the expiration date or use a different card.
+&gt; `Error code: expired card - decline_code: expired card`
+
+Details on the page: customer Acme Robotics Ltd, invoice INV-2048, card 4242 ending, **expires 03/24**, amount **$1,240.00 USD**. The page noted Stripe retries the charge three times over the next week, and if the card is replaced the retry succeeds automatically.
+
+**Yes — two people were talking about it in #deploys** (17:07):
+
+- **Sam Okafor:** &quot;Heads up — the checkout service is throwing expired card for test cards with old expiry dates. Not a real customer issue, but it breaks the smoke test.&quot;
+- **Priya Raman:** &quot;That&#x27;s Stripe&#x27;s sandbox behaviour, the card fixture is pinned to 03/24. I&#x27;ll rotate the fixture after lunch.&quot;
+
+Then deploy-bot reported `checkout-api@a91f3c2` going to staging, followed by: **&quot;Smoke test failed: payment_flow_test — expected 200, got 402 (card_declined).&quot;**
+
+**One thing worth flagging:** the thread frames this as a sandbox-only fixture problem, but the production dashboard you also had open showed **402 card_declined: 18,402** errors in the last 24 hours on `/v1/checkout/pay`, with the error rate at 1.9% (+0.7 pts, labelle</blockquote>
+
+<h2>4. Verification performed</h2>
+<div class="grid">
+  <div class="card avoid"><div class="kicker">tests</div><p><strong>48 passed</strong> in 10.3 s — real PNGs, real Tesseract, real SQLite, no mocks except the capture binary seam.</p></div>
+  <div class="card avoid"><div class="kicker">manifest</div><p><code>hermes plugins validate .</code> → <strong>Validation passed</strong>; security scan <strong>safe</strong>; no core override; declared tools and hooks match registrations.</p></div>
+  <div class="card avoid"><div class="kicker">demo</div><p><strong>80.0 s</strong>, silent, 1600x1000 h264, 0.9 MB — under the 90 s cap.</p></div>
+  <div class="card avoid"><div class="kicker">locality</div><p>one SQLite file + WebP files under <code>plugin-data/peripheral/</code>; no socket, no HTTP, no key.</p></div>
 </div>
-<div>
-<h3>Measured on this machine (2 vCPU ARM, no GPU)</h3>
-<pre>10 screens (1440×900)  →  10.3 s   (1.03 s/screen)
-text stored            →  12,616 chars
-warm rescan            →  0 images re-read
-tests                  →  27 passed
-validate               →  security scan: safe
-captured session       →  5 tool calls, 27.4 s
-video                  →  74 s, 0.8 MB, silent</pre>
-<h3>Privacy posture</h3>
+
+<h3>Measured on this machine</h3>
+<table>
+  <tr><th>Operation</th><th class="num">Time</th><th>Notes</th></tr>
+  <tr><td>Capture one 1600x1000 frame (X11, ffmpeg)</td><td class="num">116 ms warm / 1.2 s cold</td><td>includes process start</td></tr>
+  <tr><td>OCR that frame (Tesseract 5.3.4, 1 thread)</td><td class="num">654 ms</td><td>679 characters read</td></tr>
+  <tr><td>Index 10 screenshots at 1440x900</td><td class="num">10.6 s</td><td>12,616 characters, 1.3 MB source</td></tr>
+  <tr><td>Warm rescan of the same folder</td><td class="num">0.00 s</td><td>0 images re-read</td></tr>
+  <tr><td>Model turn: 6 tool calls + answer</td><td class="num">18.8 s</td><td>deepseek-v4.1-flash, provider-side latency included</td></tr>
+</table>
+
+<h2>5. Privacy model</h2>
+<table>
+  <tr><th>Property</th><th>How it is enforced</th></tr>
+  <tr><td>Capture is opt-in</td><td><code>capture_enabled</code> defaults to <code>false</code>; the background watcher is not even constructed unless it is true</td></tr>
+  <tr><td>Only changed frames are stored</td><td>dHash distance gate in <code>ingest.capture_and_ingest(force=False)</code>; a static desktop writes nothing</td></tr>
+  <tr><td>Bounded disk</td><td><code>capture_max_per_hour</code> (120), <code>capture_min_gap_seconds</code> (15), <code>retention_days</code></td></tr>
+  <tr><td>Redaction at the storage boundary</td><td><code>db.record_event</code> and the OCR path apply <code>ocr.redact</code> before insert; test asserts a password never reaches the DB</td></tr>
+  <tr><td>Forget means forget</td><td><code>db.forget</code> unlinks thumbnails <em>and</em> captured frames, outside the lock, after the commit; the user's own files are never unlinked</td></tr>
+  <tr><td>The agent can be told to forget</td><td><code>screen_forget</code> tool, advertised in its schema</td></tr>
+  <tr><td>No shell injection surface</td><td>every capture command is an argv list; no <code>shell=True</code> anywhere</td></tr>
+</table>
+
+<h2>6. Reproduction</h2>
+<pre class="mono small">git clone https://github.com/okyssta/hermes-peripheral &amp;&amp; cd hermes-peripheral
+uv venv .venv &amp;&amp; uv pip install --python .venv/bin/python pytest pillow pyyaml
+.venv/bin/python -m pytest tests -q          # 48 passed
+hermes plugins validate .                    # Validation passed
+
+# rebuild the demo evidence from scratch (needs a display + a browser)
+Xvfb :99 -screen 0 1600x1000x24 &amp;
+DISPLAY=:99 python3 scripts/demo_capture.py
+HERMES_HOME=/tmp/demo python3 scripts/demo_session.py "what was that card error?"
+python3 scripts/make_demo_video.py
+python3 scripts/make_dossier.py</pre>
+
+<h3>Artifact hashes</h3>
+<table>
+  <tr><th>File</th><th>sha256</th></tr>
+  <tr><td class='mono'>demo.mp4</td><td class='mono small'>cf6552582c0e17abefa2da019f3e10410aab6d4c24567d4103b8391cb707cce6</td></tr>
+<tr><td class='mono'>demo-transcript.json</td><td class='mono small'>9b1ac0c8b99c5099c969867cf5b0d73fbbbf4f9b1e3699889f025e6aae20f65b</td></tr>
+<tr><td class='mono'>demo-transcript.txt</td><td class='mono small'>3fe187adae7b4838f6d84fcfa81e1a19db58ef721edcdb6c7492a5c39ee8b0e4</td></tr>
+</table>
+
+<h2>7. Limits and open risks</h2>
 <ul>
-  <li>Zero network calls; no telemetry, no sync, no model call to index</li>
-  <li>Never captures the screen — reads files the OS already wrote</li>
-  <li><span class="mono">/peripheral forget &lt;id&gt;|all</span> deletes the row <b>and</b> the thumbnail this plugin wrote; <span class="mono">pause</span>; <span class="mono">retention_days</span></li>
-  <li>The screenshots themselves are never modified or deleted — only copies the plugin made</li>
-</ul>
-</div>
-</div>
-
-<h2>4. Prior-art audit (the part that decides “unique”)</h2>
-<table>
-  <tr><th style="width:44mm">Nearest thing</th><th>What it actually does</th><th style="width:58mm">Why this is not that</th></tr>
-  <tr><td class="mono">mediarag</td><td>Hybrid semantic search over a document/media corpus you point it at (285 MB embeddings, MCP).</td><td>No screen capture, no time semantics, no timeline; a library indexer.</td></tr>
-  <tr><td class="mono">document-reader</td><td>OCR of documents into a Desktop viewer, per profile.</td><td>Reads what you give it; no history, no agent tools, no search by time.</td></tr>
-  <tr><td class="mono">modlens</td>, <span class="mono">hermes-vision-inline</span></td><td>Vision bridges that describe an image to a text-only model.</td><td>Per-image perception; nothing persists, nothing is searchable.</td></tr>
-  <tr><td class="mono">source-tray</td><td>Records the URLs the <i>agent</i> opened, in a Desktop pane.</td><td>Captures the agent's browsing, not the user's screen, and stores no content.</td></tr>
-  <tr><td class="mono">hermes-time-machine, session-diff</td><td>Timeline/scrubber over <i>sessions</i>.</td><td>Conversation history, not the screen.</td></tr>
-  <tr><td>Windows Recall, screenpipe (22k★)</td><td>OS-level screenshot search / open computer history.</td><td>Not agent-native: no tools, no time-bounded recall, no join with agent actions, not installable in Hermes. They prove the demand.</td></tr>
-</table>
-<p><b>The delta is one mechanism:</b> a persistent, time-indexed percept of the user's screen that the agent can
-query, joined to a log of what the agent itself did. Scope of the claim: “no catalog entry and no repo in the wave
-does this”, not “no software anywhere does this”.</p>
-
-<h2>5. Deliverables</h2>
-<table>
-  <tr><th style="width:34mm">Artifact</th><th>Where</th></tr>
-  <tr><td>Plugin source (MIT)</td><td class="mono">https://github.com/okyssta/hermes-peripheral</td></tr>
-  <tr><td>Catalog PR</td><td class="mono">https://github.com/NousResearch/hermes-agent/pull/149463</td></tr>
-  <tr><td>Demo video (74 s, silent)</td><td class="mono">docs/demo.mp4</td> — also sent to Discord</td></tr>
-  <tr><td>Captured session</td><td><span class="mono">docs/demo-transcript.txt</span> · <span class="mono">.json</span> — the Q&amp;A the video renders from</td></tr>
-  <tr><td>Tests / harness</td><td><span class="mono">tests/</span> (27), <span class="mono">scripts/demo_session.py</span>, <span class="mono">scripts/make_demo_video.py</span></td></tr>
-  <tr><td>Installed locally</td><td><span class="mono">main</span> profile, watch dir <span class="mono">/root/demo-screens/Screenshots</span> (10 screens indexed)</td></tr>
-</table>
-<p>The catalog pins the code commit <span class="mono">25342ff</span> (source, tests, demo, transcript). This PDF is committed
-immediately after it: <span class="mono">git diff 25342ff HEAD -- '*.py'</span> is empty, so what you read describes exactly what is pinned.</p>
-
-<h2>6. Review round 1 — what changed, and the test that holds it</h2>
-<p>An internal review read the code cold and reproduced three defects. Each is fixed in <span class="mono">25342ff</span>,
-with a test that fails on the old behaviour. Nothing else in the submission changed its claim status.</p>
-<table>
-  <tr><th style="width:40mm">Defect</th><th>Fix</th></tr>
-  <tr><td><span class="mono">/peripheral forget</span> deleted rows but left the 360 px copy of the screen on disk.</td>
-      <td><span class="mono">db.forget</span> unlinks the thumbnail it wrote and sweeps the thumbs tree on <span class="mono">forget all</span>. Reproduced live: 10 thumbs / 41,692 bytes → 0, user's originals untouched.<br>
-      Tests: <span class="mono">test_forget_deletes_the_thumbnail_it_wrote</span>, <span class="mono">test_forget_all_sweeps_every_thumbnail</span>.</td></tr>
-  <tr><td>Agent event details were stored verbatim, so <span class="mono">--password=</span> and bearer tokens reached the events table.</td>
-      <td>Redaction moved to the storage boundary (<span class="mono">db.record_event</span>) and applied in the hook before truncation; a pattern for credentials inside connection URLs was added.<br>
-      Tests: <span class="mono">test_agent_event_details_are_redacted_before_storage</span>, <span class="mono">test_post_tool_call_hook_redacts_before_the_event_is_written</span>.</td></tr>
-  <tr><td>The “model chose the tools” claim cited a script that sent the literal <span class="mono">Bearer ***</span>, and the video's answer text was hardcoded.</td>
-      <td>The script uses the key, writes <span class="mono">docs/demo-transcript.json</span> / <span class="mono">.txt</span>, and the video renders its Q&amp;A scene from that transcript; it refuses to render without one. The Q&amp;A in §2 is the captured run.<br>
-      Evidence: the transcript itself.</td></tr>
-</table>
-<p>Minor items also fixed: <span class="mono">before &lt;time&gt;</span> was searched as a lower bound (now an upper bound,
-with a test), and the settings docstring pointed at a test file that did not exist.</p>
-
-<h2>7. What I would do next, in order</h2>
-<ul>
-  <li>Post the X demo and file the Typeform (needs your account) — the only two submission steps left.</li>
-  <li>Add a capture adapter per OS behind an explicit opt-in, if the catalog review asks for one; deliberately withheld for v1.</li>
-  <li>Semantic fallback for paraphrased queries (FTS only today): embed the OCR text when a local model is available, keeping text search as the deterministic base.</li>
-  <li>Re-record the demo through <span class="mono">hermes chat</span> once this host's new-session provider error is fixed.</li>
+  <li><strong>OCR noise is real.</strong> The demo's own OCR read <code>expired_card</code> as <code>expired card</code> and
+      "Acme Robotics Ltd" as "Acme Robolies Lid". Mitigations: prefix fallback in search, snippet re-ranking, and the
+      image attachment so the model can read what OCR could not.</li>
+  <li><strong>Background capture sees everything on the display.</strong> That is the point and the risk. It is off by
+      default, rate-limited, and deletable per screen; the README says so in the privacy section rather than burying it.</li>
+  <li><strong>Native image attachment depends on the model.</strong> When the configured model does not declare vision,
+      results stay text (with the image path), so no provider is ever handed a block it cannot read.</li>
+  <li><strong>Cross-platform capture paths are implemented, argued and unit-tested, but only X11 was executed here.</strong>
+      A maintainer on macOS/Windows would be the right person to confirm the other backends.</li>
+  <li><strong>No live gateway turn was possible on this host</strong> (<code>invalid_params</code>, plugin-independent).
+      The transcript is a real provider session against the real handlers, not a rendered script.</li>
 </ul>
 
-<p class="foot">Prepared by Hermes (kanban task t_a960d4f7) for Kyssta · every number above came from a command run on this host ·
-claims labelled demonstrated / hypothesis / negative / planned, no unlabelled assurances.</p>
+<h2>8. Change log: 1.0.1 → 2.0.0</h2>
+<table>
+  <tr><th>Area</th><th>Change</th></tr>
+  <tr><td>Capture</td><td>new <code>capture.py</code>: X11 (ffmpeg), Wayland (grim), macOS (screencapture), Windows (PowerShell), ImageMagick/scrot/maim fallbacks; argv-only, timeouts, no shell</td></tr>
+  <tr><td>Tools</td><td><code>screen_capture</code> and <code>screen_forget</code> added; <code>screen_show</code> returns the screen itself on vision models</td></tr>
+  <tr><td>Indexing</td><td>captured frames stored as WebP; visual index when Tesseract is absent; change gate for background capture</td></tr>
+  <tr><td>Privacy</td><td>forget and retention now delete captured frames as well as thumbnails; captured frames live only under plugin-data</td></tr>
+  <tr><td>Search</td><td>prefix fallback for OCR noise, with an honest-miss test</td></tr>
+  <tr><td>Surface</td><td><code>/peripheral capture</code>, <code>/peripheral watch on|off</code>, capture readiness in status; skill rewritten</td></tr>
+  <tr><td>Tests</td><td>27 → 48</td></tr>
+</table>
+
+<footer>Peripheral 77b55d7 · dossier generated from the repository at
+<span class="mono">77b55d76575c533437a984d00a973ad793b25d89</span> · every figure in this document is read from the build, not typed.</footer>
 </body></html>

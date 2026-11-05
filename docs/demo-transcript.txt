@@ -1,88 +1,169 @@
 peripheral — captured tool-calling session
 
-captured : 2026-11-05T12:41:59Z
+captured : 2026-11-05T17:07:14Z
 provider : https://opencode.ai/zen/go/v1
 model    : deepseek-v4.1-flash
-index    : 10 files considered, 10 added in 10.3s
+index    : 3 screens (3 captured live), 1,572 chars of OCR text · capture: ready (x11-ffmpeg)
 
-The model was given the plugin's four tool schemas and the user's question;
+The model was given the plugin's six tool schemas and the user's question;
 every tool call and answer below came back from the provider, not from this script.
 Re-run scripts/demo_session.py (see README) to reproduce it.
 
-❯ what was that card error I saw on Monday morning?
+❯ I got a card error a little while ago — what did it actually say? And was anyone else talking about it?
 
-  ⚙ screen_recall({"query": "card error", "since": "7d", "limit": 15})
-  │ 1 screen for “card error” (of 10) · nearest 3d ago
+  ⚙ screen_recall({"query": "card declined", "since": "today", "limit": 15})
+  │ 3 screens for “card declined” · nearest just now
   │ 
-  │ [8] Nov 02 11:05 · 2,126 chars · Screenshot 2026-11-02 at 11.05.37.png
-  │      “MAKE REQUESTS <1 expired card The card has expired. Check the expiration date or use a different card.”
-  │      /root/demo-screens/Screenshots/Screenshot 2026-11-02 at 11.05.37.png
+  │ [1] today 17:06 · 679 chars · live · checkout error — card declined
+  │      “@ Your card was declined”
+  │      /tmp/ph-demo-b/plugin-data/peripheral/frames/a25c8bc63798f8bb1f91ff62380aab6a0b5d78b802007598c26e6c6f81847cb2.webp
   │ 
-  │ screen_show(id) opens one screen's full text; the path can be read with vision.
-  │ … 141 more chars
-
-  ⚙ screen_recall({"query": "card declined", "since": "7d", "limit": 15})
-  │ No screen matched “card declined”.
-  │ Try a distinctive word from the page (an error code, a name, a price), or widen the window with since/until.
-
-  ⚙ screen_show({"id": 8})
-  │ screen #8 · Nov 02 11:05 (3d ago)
-  │ path: /root/demo-screens/Screenshots/Screenshot 2026-11-02 at 11.05.37.png
-  │ read: 2,126 characters of text
-  │ title: stripe Docs Q Search 7 ASkAL# Create account Sign in
+  │ [2] today 17:07 · 465 chars · live · Sam in #deploys about expired_card
+  │      “| ‘Smoke test failed: payment_flow_test — expected 200, got 402 (card_declined).”
+  │      /tmp/ph-demo-b/plugin-data/peripheral/frames/101b1b67ed822c3dafa53b8d0ddf6f853825b6f9213e83ac60e3e98c2b6cb0cb.webp
   │ 
-  │ stripe Docs Q Search 7 ASkAL# Create account Sign in
-  │ Get started Payments Revenue Risk Data Moneymanagement Stablecoins Embeddedfinance Developer resources APIs&SDKsv Helpy
-  │ MAKE REQUESTS <1 expired card The card has expired. Check the expiration date or use a different card.
-  │ > Expand responses
-  │ Pagination expired_payment_method The payment method expired. Check the expiration date or use a different payment method.
-  │ Search objects
-  │ Localize content Financial_connections_ Data can't be refreshed on inactive Financial Connections accounts.
-  │ account_inactive
-  │ TESTING AND DATA
-  │ > Metadata
-  │ financial_connections_no_ Transaction data can only be retrieved for accounts that have at least one successful transaction refresh.
-  │ > Test your application successful_transaction_
-  │ ERROR HANDLING refresh)
-  │ > Handle errors
-  │ forwarding api_inactive The Vault and Forward AP! is currently not accessible with this account and configuration. Contact us if you're receiving
-  │ Error codes
-  │ this error.
-  │ > Events
-  │ > Testing for
-  │ … 1263 more chars
-
-  ⚙ screen_timeline({"since": "2026-11-02", "until": "2026-11-02 12:00", "limit": 40})
-  │ Screen timeline · since 2026-11-02 · 3 entries
+  │ [3] today 17:07 · 428 chars · live · production dashboard, 402 spike
+  │      “402 card_declined 18,402”
+  │      /tmp/ph-demo-b/plugin-data/peripheral/frames/66f59e19f434901515eb92d28a632602de433f9fd7e8b7c4508b9615bfc1579c.webp
   │ 
-  │ — Mon Nov 02 —
-  │   09:40  pytest -q tests/test worker. py                       [#10]
-  │   10:52  Nordwind Labs # ingest-platform                       [#9]
-  │   11:05  Screenshot 2026-11-02 at 11.05.37.png                 [#8]
+  │ screen_show(id) opens one screen — full text, and the image itself when the model can see it. screen_capture() remembers whatever is on screen right now.
+  │ … 381 more chars
 
-  ⚙ screen_show({"id": 9, "chars": 2000})
-  │ screen #9 · Nov 02 10:52 (3d ago)
-  │ path: /root/demo-screens/Screenshots/Screenshot 2026-11-02 at 10.52.31.png
-  │ read: 478 characters of text
-  │ title: Nordwind Labs # ingest-platform
+  ⚙ screen_recall({"query": "card error", "limit": 15})
+  │ 2 screens for “card error” (of 3) · nearest just now
   │ 
-  │ Nordwind Labs # ingest-platform
-  │ 3 Maya Chen 10:47
-  │ ennoes Soe uc the retry budget change is failing on staging — worker returns 502 after 3 attempts instead of backing off. PR is #482.
-  │ cc @sam — can you look before the 3pm deploy freeze?
-  │ ‘Sam Kovac
-  │ on it. the budget is consumed by the healthcheck calls, so the real retries never run. fix is to exclude /status from the budget.
-  │ [uc | Maya Chen
-  │ O that explains it. also the Grafana panel shows p99 at 4.2s during the retry storm.
-  │ … 136 more chars
+  │ [1] today 17:06 · 679 chars · live · checkout error — card declined
+  │      “Error code: expired card - decline_code: expired card”
+  │      /tmp/ph-demo-b/plugin-data/peripheral/frames/a25c8bc63798f8bb1f91ff62380aab6a0b5d78b802007598c26e6c6f81847cb2.webp
+  │ 
+  │ [3] today 17:07 · 428 chars · live · production dashboard, 402 spike
+  │      “402 card_declined 18,402”
+  │      /tmp/ph-demo-b/plugin-data/peripheral/frames/66f59e19f434901515eb92d28a632602de433f9fd7e8b7c4508b9615bfc1579c.webp
+  │ 
+  │ screen_show(id) opens one screen — full text, and the image itself when the model can see it. screen_capture() remembers whatever is on screen right now.
+  │ … 254 more chars
 
-answer (27.45s):
+  ⚙ screen_recall({"query": "payment failed", "limit": 15})
+  │ 2 screens for “payment failed” (of 3) · nearest just now
+  │ 
+  │ [1] today 17:06 · 679 chars · live · checkout error — card declined
+  │      “Payment failed”
+  │      /tmp/ph-demo-b/plugin-data/peripheral/frames/a25c8bc63798f8bb1f91ff62380aab6a0b5d78b802007598c26e6c6f81847cb2.webp
+  │ 
+  │ [2] today 17:07 · 465 chars · live · Sam in #deploys about expired_card
+  │      “| ‘Smoke test failed: payment_flow_test — expected 200, got 402 (card_declined).”
+  │      /tmp/ph-demo-b/plugin-data/peripheral/frames/101b1b67ed822c3dafa53b8d0ddf6f853825b6f9213e83ac60e3e98c2b6cb0cb.webp
+  │ 
+  │ screen_show(id) opens one screen — full text, and the image itself when the model can see it. screen_capture() remembers whatever is on screen right now.
+  │ … 254 more chars
 
-Monday's card error was on the Stripe docs error-codes page (screenshot at 11:05, Nov 2) — the code listed there was:
+  ⚙ screen_show({"id": 1})
+  │ screen #1 · today 17:06 (just now)
+  │ path: /tmp/ph-demo-b/plugin-data/peripheral/frames/a25c8bc63798f8bb1f91ff62380aab6a0b5d78b802007598c26e6c6f81847cb2.webp
+  │ origin: captured by Peripheral (the frame is owned by the plugin)
+  │ read: 679 characters of text
+  │ title: checkout error — card declined
+  │ 
+  │ TEST MODE
+  │ Payment failed
+  │ The charge for invoice INV-2048 was not completed.
+  │ @ Your card was declined
+  │ The card has expired. Check the expiration date or use a different
+  │ card.
+  │ Error code: expired card - decline_code: expired card
+  │ Customer Acme Robolies Lid
+  │ Invoice INV-2048
+  │ Card 4242 - expires 03/24
+  │ Amount $1,240.00 USD
+  │ Retry payment
+  │ What happens next
+  │ Stripe retries this charge three times over the next week. If the
+  │ card is replaced, the retry succeeds automatically and the
+  │ customer is notified.
+  │ Decline codes
+  │ expired_card — the card's expiry date has passed
+  │ insufficient_funds — the account cannot cover the amount.
+  │ do_not_honor — the issuer refused without a specific reason.
+  │ … 122 more chars
 
-**`expired card`** — "The card has expired. Check the expiration date or use a different card."
+  ⚙ screen_show({"id": 2})
+  │ screen #2 · today 17:07 (just now)
+  │ path: /tmp/ph-demo-b/plugin-data/peripheral/frames/101b1b67ed822c3dafa53b8d0ddf6f853825b6f9213e83ac60e3e98c2b6cb0cb.webp
+  │ origin: captured by Peripheral (the frame is owned by the plugin)
+  │ read: 465 characters of text
+  │ title: Sam in #deploys about expired_card
+  │ 
+  │ Channels # deploys
+  │ ‘Sam Okafor
+  │ Heads up — the checkout service is throwing expired card for test cards with old expiry dates. Not a real customer issue, but
+  │ it breaks the smoke test.
+  │ Priya Raman i
+  │ That's Stripe's sandbox behaviour, the card fixture is pinned to 03/24. I'll rotate the fixture after lunch.
+  │ deploy-bot 10:51 iv
+  │ Deploy checkout-api@a91f3c2 — staging succeeded in 2m 14s.
+  │ | ‘Smoke test failed: payment_flow_test — expected 200, got 402 (card_declined).
+  │ … 122 more chars
 
-Right next to it on the same list was **`expired_payment_method`** — "The payment method expired. Check the expiration date or use a different payment method."
+  ⚙ screen_show({"id": 3})
+  │ screen #3 · today 17:07 (just now)
+  │ path: /tmp/ph-demo-b/plugin-data/peripheral/frames/66f59e19f434901515eb92d28a632602de433f9fd7e8b7c4508b9615bfc1579c.webp
+  │ origin: captured by Peripheral (the frame is owned by the plugin)
+  │ read: 428 characters of text
+  │ title: production dashboard, 402 spike
+  │ 
+  │ Acme Robotics — Production
+  │ REQUESTS
+  │ 4.28M
+  │ + 12.4% vs yesterday
+  │ TOP FAILING ENDPOINT
+  │ ROUTE
+  │ Ivilcheckout/pay
+  │ Iilinvoicesl:id
+  │ Ivilcustomers
+  │ last 24 hours - eu-west-L
+  │ ERROR RATE
+  │ 1.9%
+  │ +0.7 pts - 402 spike
+  │ ‘STATUS COUNT
+  │ 402 card_declined 18,402
+  │ 500 timeout 1,209
+  │ 200 healthy 402,118
+  │ P99 LATENCY
+  │ 412 ms
+  │ -38ms
+  │ RECENT DEPLOYS
+  │ SERVICE
+  │ checkout-api
+  │ ledger
+  │ VERSION
+  │ a91f3c2
+  │ 7d2c110
+  │ ACTIVE CUSTOMERS
+  │ 1,284
+  │ +61 this week
+  │ ENV
+  │ staging
+  │ production
+  │ … 122 more chars
 
-If you were actually chasing something in your own code rather than reading the docs, the other morning screens were the `ingest-platform` Slack thread (10:52, the 502/retry-budget discussion) and a `pytest -q tests/test_worker.py` run at 09:40 — no payment errors in either.
+answer (18.79s):
+
+Here's what was on screen:
+
+**The error itself** (17:06, a Stripe checkout page in TEST MODE):
+
+> **Payment failed** — The charge for invoice INV-2048 was not completed.
+> **Your card was declined** — The card has expired. Check the expiration date or use a different card.
+> `Error code: expired card - decline_code: expired card`
+
+Details on the page: customer Acme Robotics Ltd, invoice INV-2048, card 4242 ending, **expires 03/24**, amount **$1,240.00 USD**. The page noted Stripe retries the charge three times over the next week, and if the card is replaced the retry succeeds automatically.
+
+**Yes — two people were talking about it in #deploys** (17:07):
+
+- **Sam Okafor:** "Heads up — the checkout service is throwing expired card for test cards with old expiry dates. Not a real customer issue, but it breaks the smoke test."
+- **Priya Raman:** "That's Stripe's sandbox behaviour, the card fixture is pinned to 03/24. I'll rotate the fixture after lunch."
+
+Then deploy-bot reported `checkout-api@a91f3c2` going to staging, followed by: **"Smoke test failed: payment_flow_test — expected 200, got 402 (card_declined)."**
+
+**One thing worth flagging:** the thread frames this as a sandbox-only fixture problem, but the production dashboard you also had open showed **402 card_declined: 18,402** errors in the last 24 hours on `/v1/checkout/pay`, with the error rate at 1.9% (+0.7 pts, labelled "402 spike"). So the same code is appearing at real volume in production, not just in the test suite. If it were purely the pinned test card, you'd expect it to stay in staging — worth confirming with Priya whether the fixture rotation actually explains the production count.
 

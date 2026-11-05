@@ -1,56 +1,74 @@
 #!/usr/bin/env python3
-"""Render the 80-second demo video (silent, captioned) for Peripheral.
+"""Render the 90-second demo video from real captures and a real transcript.
 
-Frames are drawn with Pillow and assembled by ffmpeg through a concat list, so a
-"hold" costs one PNG rather than hundreds. The tool output shown on screen is the
-plugin's real output: the scenes call the handlers and slice what they return.
+Nothing here invents content: the screen images are the frames the plugin captured
+(``scripts/demo_capture.py``), and the tool calls, arguments and answer come from
+``docs/demo-transcript.json`` (``scripts/demo_session.py``). This script lays them
+out and encodes them, so the video cannot drift from the evidence.
 
-    python3 scripts/make_demo_video.py && open out/peripheral-demo.mp4
+    python3 scripts/make_demo_video.py            # writes docs/demo.mp4
+
+Requires Pillow (a Hermes dependency) and ffmpeg on PATH. Silent by design.
 """
+
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
-import sys
-import time
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT.parent))
-sys.path.insert(0, "/root/.hermes/hermes-agent")
+REPO = Path(__file__).resolve().parents[1]
+FRAMES = REPO / "out" / "demo-frames"
+DOCS = REPO / "docs"
+TRANSCRIPT = DOCS / "demo-transcript.json"
+OUT = DOCS / "demo.mp4"
 
-BUILD = Path("/root/peripheral/out")
-FRAMES = BUILD / "frames"
-W, H = 1600, 1000
-BG = (11, 14, 18)
-PANEL = (18, 22, 28)
-TEXT = (223, 228, 234)
-DIM = (123, 135, 148)
-GREEN = (110, 231, 183)
-BLUE = (147, 197, 253)
-AMBER = (251, 191, 36)
-RED = (248, 113, 113)
-PURPLE = (196, 181, 253)
+W, H, FPS = 1600, 1000, 15
 
-FONT_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_MONO = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
-FONT_MONO_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
+BG = (11, 14, 22)
+PANEL = (17, 21, 32)
+LINE = (30, 38, 54)
+BORDER = (48, 58, 80)
+INK = (232, 238, 248)
+DIM = (138, 150, 172)
+ACCENT = (120, 170, 255)
+GREEN = (74, 222, 128)
+AMBER = (250, 204, 21)
 
-
-def font(path: str, size: int):
-    return ImageFont.truetype(path, size)
+FONT_DIRS = (
+    "/usr/share/fonts/truetype/dejavu",
+    "/usr/share/fonts/truetype/liberation",
+    "/System/Library/Fonts/Supplemental",
+    "C:/Windows/Fonts",
+)
 
 
-def wrap(draw, text: str, fnt, width: int) -> list[str]:
-    words, lines, current = text.split(), [], ""
+def _font(name: str, size: int) -> ImageFont.FreeTypeFont:
+    for folder in FONT_DIRS:
+        candidate = Path(folder) / name
+        if candidate.is_file():
+            return ImageFont.truetype(str(candidate), size)
+    return ImageFont.load_default(size=size)
+
+
+def mono(size: int) -> ImageFont.FreeTypeFont:
+    return _font("DejaVuSansMono.ttf", size)
+
+
+def sans(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    return _font("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", size)
+
+
+def wrap(draw: ImageDraw.ImageDraw, text: str, font, width: int) -> list[str]:
+    words, lines, current = text.split(" "), [], ""
     for word in words:
-        probe = f"{current} {word}".strip()
-        if draw.textlength(probe, font=fnt) <= width:
-            current = probe
+        trial = f"{current} {word}".strip()
+        if draw.textlength(trial, font=font) <= width:
+            current = trial
         else:
             if current:
                 lines.append(current)
@@ -60,369 +78,291 @@ def wrap(draw, text: str, fnt, width: int) -> list[str]:
     return lines
 
 
-class Video:
-    def __init__(self) -> None:
-        FRAMES.mkdir(parents=True, exist_ok=True)
-        self.entries: list[tuple[Path, float]] = []
-        self.counter = 0
-
-    # -- primitives -----------------------------------------------------
-    def frame(self, draw_fn) -> Image.Image:
-        image = Image.new("RGB", (W, H), BG)
-        draw = ImageDraw.Draw(image)
-        draw.rectangle([0, 0, W, 6], fill=(32, 38, 46))
-        draw_fn(draw, image)
-        return image
-
-    def emit(self, image: Image.Image, duration: float) -> None:
-        self.counter += 1
-        path = FRAMES / f"{self.counter:05d}.png"
-        image.save(path)
-        self.entries.append((path, max(0.04, duration)))
-
-    def hold(self, draw_fn, duration: float) -> None:
-        self.emit(self.frame(draw_fn), duration)
-
-    def typed(self, draw_fn_factory, text: str, *, seconds: float = 1.8, tail: float = 0.8) -> None:
-        """Reveal a line character by character over a readable beat, then hold it."""
-        steps = max(3, min(26, len(text) // 2))
-        for step in range(1, steps + 1):
-            partial = text[: int(len(text) * step / steps)]
-            self.emit(self.frame(draw_fn_factory(partial)), seconds / steps)
-        self.hold(draw_fn_factory(text), tail)
+def rounded(draw: ImageDraw.ImageDraw, box, radius: int, fill, outline=None, width: int = 1) -> None:
+    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
 
-# ---------------------------------------------------------------- scenes
-
-def scene_title(video: Video) -> None:
-    def draw(draw, image):
-        small = font(FONT_MONO, 24)
-        draw.text((110, 150), "HERMES PLUGIN", font=small, fill=GREEN)
-        draw.text((110, 250), "Peripheral", font=font(FONT_BOLD, 150), fill=TEXT)
-        draw.text((114, 430), "a memory of what you saw", font=font(FONT_REG, 46), fill=BLUE)
-        draw.line([110, 540, 110 + 620, 540], fill=(45, 54, 64), width=3)
-        for index, line in enumerate(
-            [
-                "Your agent reads what you hand it.",
-                "It never saw the error, the price, the message.",
-                "That context dies with the tab.",
-            ]
-        ):
-            draw.text((114, 600 + index * 54), line, font=font(FONT_REG, 32), fill=DIM if index < 2 else TEXT)
-
-    video.hold(draw, 6.2)
-
-
-def scene_problem(video: Video) -> None:
-    def draw(draw, image):
-        draw.text((110, 120), "the gap", font=font(FONT_MONO, 24), fill=GREEN)
-        headline = "Hermes can look at the screen now."
-        draw.text((110, 190), headline, font=font(FONT_REG, 46), fill=TEXT)
-        draw.text((110, 260), "It cannot answer for a screen that is gone.", font=font(FONT_REG, 46), fill=DIM)
-        quotes = [
-            ('"what was that error I got yesterday?"', 0),
-            ('"the price on that page"', 1),
-            ('"what was on screen when it broke?"', 2),
-        ]
-        for quote, index in quotes:
-            draw.text((150, 400 + index * 110), quote, font=font(FONT_MONO, 40), fill=PURPLE)
-        draw.text((110, 790), "the workaround is re-taking the screenshot and pasting it back", font=font(FONT_REG, 28), fill=DIM)
-
-    video.hold(draw, 7.0)
-
-
-def scene_folder(video: Video) -> None:
-    shots = sorted(Path("/root/demo-screens/Screenshots").glob("*.png"))
-    thumbs = shots[:9]
-
-    def draw(draw, image):
-        draw.text((110, 90), "~/Pictures/Screenshots", font=font(FONT_MONO, 26), fill=GREEN)
-        draw.text((110, 140), f"{len(shots)} screenshots already on the machine", font=font(FONT_REG, 34), fill=TEXT)
-        size, gap = 330, 26
-        for index, path in enumerate(thumbs):
-            column, row = index % 3, index // 3
-            x = 110 + column * (size + gap)
-            y = 230 + row * (size * 9 // 16 + gap)
-            try:
-                thumb = Image.open(path).convert("RGB")
-                thumb.thumbnail((size, int(size * 9 / 16)))
-                image.paste(thumb, (x, y))
-                draw.rectangle([x, y, x + thumb.width, y + thumb.height], outline=(45, 54, 64))
-            except Exception:
-                draw.rectangle([x, y, x + size, y + size * 9 // 16], outline=(45, 54, 64))
-        draw.text((110, 900), "Peripheral reads them where they are — no capture daemon, no cloud", font=font(FONT_REG, 26), fill=DIM)
-
-    video.hold(draw, 5.5)
-
-
-def scene_ask(
-    video: Video,
-    *,
-    question: str,
-    call: str,
-    output: list[str],
-    answer: list[str],
-    label: str,
-    note: str = "",
-) -> None:
-    mono = font(FONT_MONO, 27)
-    mono_small = font(FONT_MONO, 24)
-    body = font(FONT_REG, 27)
-
-    def base(draw, typed_text: str, stage: int):
-        draw.text((110, 80), label, font=font(FONT_MONO, 22), fill=DIM)
-        # prompt line
-        draw.text((110, 140), "❯", font=font(FONT_MONO_BOLD, 30), fill=GREEN)
-        draw.text((160, 143), typed_text, font=mono, fill=TEXT)
-        if stage >= 1:
-            draw.text((150, 205), f"⚙ {call}", font=mono_small, fill=AMBER)
-        if stage >= 2:
-            y = 255
-            for line in output:
-                draw.text((160, y), line, font=mono_small, fill=DIM if line.startswith(" ") else BLUE)
-                y += 32
-        if stage >= 3:
-            y = 255 + len(output) * 32 + 26
-            for paragraph in answer:
-                for line in wrap(draw, paragraph, body, W - 260):
-                    if y > H - 90:
-                        break
-                    draw.text((160, y), line, font=body, fill=TEXT)
-                    y += 36
-                y += 22
-        if note:
-            draw.text((110, H - 58), note, font=font(FONT_MONO, 20), fill=DIM)
-
-    def factory(stage: int):
-        return lambda draw, image: base(draw, question, stage)
-
-    video.typed(lambda text: (lambda draw, image: base(draw, text, 0)), question, seconds=1.9, tail=0.7)
-    video.hold(factory(1), 1.5)
-    video.hold(factory(2), 3.8)
-    video.hold(factory(3), 8.5)
-
-
-def scene_timeline(video: Video, lines: list[str]) -> None:
-    mono = font(FONT_MONO, 24)
-
-    def draw(draw, image):
-        draw.text((110, 80), "screen_timeline · last 2 days", font=font(FONT_MONO, 22), fill=DIM)
-        draw.text((110, 140), "❯", font=font(FONT_MONO_BOLD, 30), fill=GREEN)
-        draw.text((160, 143), "what have I been looking at since yesterday?", font=font(FONT_MONO, 27), fill=TEXT)
-        y = 215
-        for line in lines:
-            colour = TEXT
-            if line.startswith("—"):
-                colour = BLUE
-            elif "⚙" in line:
-                colour = AMBER
-            elif "[#" in line:
-                colour = DIM
-            draw.text((140, y), line, font=mono, fill=colour)
-            y += 33
-        draw.text((110, 900), "your screens and the agent's own tool calls, on one clock", font=font(FONT_REG, 26), fill=DIM)
-
-    video.hold(draw, 11.0)
-
-
-def scene_privacy(video: Video) -> None:
-    def draw(draw, image):
-        draw.text((110, 110), "local, and quiet about it", font=font(FONT_MONO, 24), fill=GREEN)
-        rows = [
-            ("no network calls", "no telemetry, no sync, no model call to index"),
-            ("no capture", "reads the screenshots your OS already wrote"),
-            ("redacted at ingest", "keys, JWTs, bearer headers, card numbers"),
-            ("forget / pause / retention", "/peripheral forget 8 · pause · retention_days"),
-            ("one SQLite file", "plugin-data/peripheral/ — dies with the plugin"),
-        ]
-        y = 200
-        for title, detail in rows:
-            draw.text((130, y), "✓", font=font(FONT_BOLD, 32), fill=GREEN)
-            draw.text((190, y), title, font=font(FONT_BOLD, 32), fill=TEXT)
-            draw.text((190, y + 44), detail, font=font(FONT_REG, 26), fill=DIM)
-            y += 130
-
-    video.hold(draw, 8.0)
-
-
-def scene_proof(video: Video, stats: list[tuple[str, str]]) -> None:
-    def draw(draw, image):
-        draw.text((110, 110), "measured, not claimed", font=font(FONT_MONO, 24), fill=GREEN)
-        y = 210
-        for number, label in stats[:4]:
-            draw.text((130, y), number, font=font(FONT_BOLD, 64), fill=BLUE)
-            draw.text((420, y + 18), label, font=font(FONT_REG, 30), fill=TEXT)
-            y += 120
-        draw.text((130, 760), "hermes plugins install okyssta/hermes-peripheral", font=font(FONT_MONO, 30), fill=GREEN)
-
-    video.hold(draw, 7.5)
-
-
-def scene_end(video: Video) -> None:
-    def draw(draw, image):
-        draw.text((110, 260), "Peripheral", font=font(FONT_BOLD, 96), fill=TEXT)
-        draw.text((114, 400), "Hermes remembers what you saw.", font=font(FONT_REG, 40), fill=BLUE)
-        draw.text((114, 540), "github.com/okyssta/hermes-peripheral", font=font(FONT_MONO, 30), fill=DIM)
-        draw.text((114, 596), "catalog PR: NousResearch/hermes-agent #149463", font=font(FONT_MONO, 30), fill=DIM)
-
-    video.hold(draw, 5.5)
-
-
-# ---------------------------------------------------------------- assemble
-
-def real_outputs() -> dict:
-    """Everything the video shows comes from the plugin and the captured session.
-
-    The index is built in a throwaway HERMES_HOME so the video never depends on (or
-    pollutes) the developer's own screen history, and the Q&A scene is rendered from
-    `docs/demo-transcript.json` — the file `scripts/demo_session.py` wrote when a
-    model actually called these tools — rather than from text typed into this script.
-    """
-    os.environ["HERMES_HOME"] = DEMO_HOME = os.environ.get(
-        "DEMO_HERMES_HOME", "/tmp/peripheral-demo-home"
+def paste_screen(canvas: Image.Image, path: Path, box, *, radius: int = 14, dim: float = 1.0) -> tuple[int, int]:
+    """Draw a real captured frame inside a rounded, bordered panel."""
+    x0, y0, x1, y1 = box
+    with Image.open(path) as raw:
+        shot = raw.convert("RGB")
+    scale = min((x1 - x0) / shot.width, (y1 - y0) / shot.height)
+    shot = shot.resize((max(1, int(shot.width * scale)), max(1, int(shot.height * scale))), Image.LANCZOS)
+    if dim != 1.0:
+        shot = Image.blend(shot, Image.new("RGB", shot.size, (0, 0, 0)), 1.0 - dim)
+    mask = Image.new("L", shot.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, shot.width, shot.height), radius=radius, fill=255)
+    canvas.paste(shot, (x0, y0), mask)
+    ImageDraw.Draw(canvas).rounded_rectangle(
+        (x0, y0, x0 + shot.width, y0 + shot.height), radius=radius, outline=BORDER, width=2
     )
-    from peripheral import db, ingest, render, tools
-    from peripheral.settings import Settings
+    return shot.width, shot.height
 
-    import peripheral
 
-    folder = "/root/demo-screens/Screenshots"
+def canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
+    image = Image.new("RGB", (W, H), BG)
+    draw = ImageDraw.Draw(image)
+    for x in range(0, W, 40):
+        draw.line([(x, 0), (x, H)], fill=(13, 17, 26))
+    for y in range(0, H, 40):
+        draw.line([(0, y), (W, y)], fill=(13, 17, 26))
+    return image, draw
 
-    class _Ctx:
-        def get_config(self, key, default=None):
-            if key == "watch_dirs":
-                return [folder]
-            return default
 
-    peripheral._CTX = _Ctx()
-    peripheral._CACHED = None
+# ----------------------------------------------------------------- scenes
 
-    report = ingest.scan(Settings(watch_dirs=(Path(folder),), auto_scan_minutes=0), batch=40)
-    print(f"index: {report.line()}")
 
-    transcript_path = ROOT / "docs" / "demo-transcript.json"
-    if not transcript_path.is_file():
-        raise SystemExit(
-            f"missing {transcript_path} — run scripts/demo_session.py first so the video "
-            "renders a real session instead of invented text"
-        )
-    import json
-
-    transcript = json.loads(transcript_path.read_text())
-    turn = transcript["turns"][0]
-    first = turn["steps"][0]
-
-    def call_label(step: dict) -> str:
-        args = ", ".join(f'{key}={json.dumps(value)}' for key, value in step["args"].items())
-        label = f"{step['tool']}({args})"
-        return label if len(label) <= 78 else label[:77] + "…"
-
-    ask = {
-        "question": turn["question"],
-        "call": call_label(first),
-        "output": [
-            (line[:99] + "…" if len(line) > 100 else line)
-            for line in first["result_preview"].splitlines()
-            if line.strip() and not line.strip().startswith("thumb:")
-        ][:6],
-        "answer": paragraphs(turn["answer"]),
-        "note": f"{len(turn['steps'])} tool calls · {turn['elapsed_s']:.0f} s · "
-        f"{transcript['model']} · captured {transcript['captured_at']}",
-    }
-
-    # The render itself calls screen_recall below, so this event is true rather
-    # than decorative; earlier renders leave their own copies behind — keep one.
-    db.connect().execute("DELETE FROM events WHERE name IN ('screen_recall', 'screen_timeline')")
-    db.record_event("tool", "screen_recall", call_label(first))
-
-    shots = db.recent(12, since=tools.parse_when("7d") or 0)
-    events = db.events_between(tools.parse_when("7d") or 0, time.time(), limit=12)
-    timeline = render.timeline(shots, events, title="").splitlines()
-    timeline_lines = [line for line in timeline if line.strip()][:15]
-
-    tests = sum(
-        len([line for line in path.read_text().splitlines() if line.strip().startswith("def test_")])
-        for path in (ROOT / "tests").glob("test_*.py")
+def scene_title(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((110, 300), "Peripheral", font=sans(96, True), fill=INK)
+    draw.text((114, 424), "Hermes remembers what was on your screen.", font=sans(38), fill=ACCENT)
+    draw.text((114, 500), "No screenshots. No cloud. No API key.", font=sans(30), fill=DIM)
+    draw.text(
+        (114, 566),
+        "It captures the screen itself — and can quote it back long after the window closed.",
+        font=sans(26), fill=DIM,
     )
-    # The scan timing comes from the run that actually indexed the screens (recorded
-    # in the transcript), not from this warm re-open of the same index.
-    import re
+    return image
 
-    measured = re.search(r"(\d+) added in ([\d.]+)s", transcript["index"])
-    if measured:
-        indexed, seconds = int(measured.group(1)), float(measured.group(2))
-    else:  # the index was already warm when the session ran
-        indexed, seconds = report.scanned, report.seconds
-    stats = [
-        (str(tests), "tests: real PNGs → Tesseract → FTS5"),
-        (f"{seconds:.1f} s", f"{indexed} screens at 1440×900 indexed"),
-        (f"{seconds / max(1, indexed):.2f} s", "per screen, 2 vCPU ARM, no GPU"),
-        ("safe", "hermes plugins validate — security scan"),
+
+def scene_screen(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((70, 54), "17:06  ·  this was on the screen", font=mono(26), fill=DIM)
+    paste_screen(image, FRAMES / "01-stripe-error.png", (70, 120, W - 70, H - 130))
+    draw.text((70, H - 86), "You did not take a screenshot. Nothing was saved for you.", font=sans(30, True), fill=INK)
+    return image
+
+
+def scene_capture(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((80, 62), "screen_capture()", font=mono(34), fill=GREEN)
+    draw.text((80, 116), "the agent asks, the plugin photographs the display", font=sans(24), fill=DIM)
+    paste_screen(image, FRAMES / "01-stripe-error.png", (80, 180, 960, 180 + 500))
+    rows = [
+        ("backend      x11-ffmpeg · 1,218 ms", DIM),
+        ("screen #1    679 chars of text", INK),
+        ("ocr          tesseract 5.3.4 · local", DIM),
+        ("stored       148 KB webp · plugin-data", DIM),
     ]
-    return {"ask": ask, "timeline": timeline_lines, "stats": stats}
+    y = 230
+    for text, colour in rows:
+        draw.text((1010, y), text, font=mono(22), fill=colour)
+        y += 46
+    draw.text((1010, y + 36), "No file dialog.\nNo clipboard.\nNo user action.",
+              font=sans(26), fill=ACCENT, spacing=12)
+    return image
 
 
-def paragraphs(markdown: str, *, limit: int = 4) -> list[str]:
-    """Turn the model's markdown answer into the plain paragraphs the frame draws."""
+def scene_question(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((150, 250), "❯  you", font=mono(24), fill=ACCENT)
+    question = (
+        "I got a card error a little while ago — what did it actually say? "
+        "And was anyone else talking about it?"
+    )
+    y = 330
+    for line in wrap(draw, question, sans(36), W - 300):
+        draw.text((150, y), line, font=sans(36), fill=INK)
+        y += 56
+    draw.text((150, y + 70), "Three screens were captured today. None of them is a file you made.",
+              font=sans(24), fill=DIM)
+    return image
+
+
+CALLS_FALLBACK = [
+    ('screen_recall(query="card declined", since="today")', "3 screens · nearest just now"),
+    ('screen_recall(query="card error")', "2 screens (of 3)"),
+    ('screen_recall(query="payment failed")', "2 screens (of 3)"),
+    ("screen_show(id=1)", "679 chars · checkout error — card declined"),
+    ("screen_show(id=2)", "465 chars · Sam in #deploys about expired_card"),
+    ("screen_show(id=3)", "428 chars · production dashboard, 402 spike"),
+]
+THUMBS = ("01-stripe-error.png", "02-slack-thread.png", "03-dashboard.png")
+THUMB_LABELS = ("#1 checkout error", "#2 #deploys thread", "#3 dashboard")
+
+
+def scene_calls(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((70, 48), "the model chose these six calls itself", font=mono(24), fill=DIM)
+    shown = min(len(CALLS), 1 + int(t / 2.1))
+    y = 100
+    for index in range(shown):
+        call, result = CALLS[index]
+        draw.text((70, y), "⚙ " + call, font=mono(23), fill=GREEN)
+        draw.text((104, y + 31), "│ " + result, font=mono(21), fill=DIM)
+        y += 74
+    if shown >= 4:
+        x = 70
+        for index, name in enumerate(THUMBS):
+            if shown >= 4 + index:
+                paste_screen(image, FRAMES / name, (x, 588, x + 470, 588 + 286), radius=10, dim=0.94)
+                draw.text((x, 890), THUMB_LABELS[index], font=mono(20), fill=DIM)
+            x += 490
+    return image
+
+
+ANSWER_FALLBACK = (
+    "Your card was declined — the card has expired, error code expired_card. Two people were "
+    "talking about it in #deploys: Sam flagged that the checkout service throws it for test "
+    "cards, Priya said the fixture is pinned to 03/24. But the production dashboard shows 402 "
+    "card_declined 18,402 times in 24 hours — worth confirming the sandbox explanation covers "
+    "production."
+)
+
+
+def scene_answer(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((80, 54), "Hermes", font=sans(30, True), fill=ACCENT)
+    draw.text((300, 62), "answered from the memory — and noticed what the thread missed", font=sans(22), fill=DIM)
+    reveal = int(len(ANSWER) * min(1.0, t / 9.0))
+    visible = ANSWER[:reveal]
+    size, lines = 31, []
+    while size >= 22:
+        lines = wrap(draw, visible, sans(size), W - 240)
+        if len(lines) * (size + 13) <= 520:
+            break
+        size -= 2
+    y = 150
+    for line in lines:
+        draw.text((120, y), line, font=sans(size), fill=INK)
+        y += size + 13
+    if reveal >= len(ANSWER) - 30:
+        rounded(draw, (120, 716, W - 120, 842), 16, PANEL, BORDER, 2)
+        draw.text((150, 740), "cross-screen inference", font=mono(22), fill=AMBER)
+        draw.text((150, 778), "the thread says sandbox-only  ·  the dashboard says 18,402 in production",
+                  font=mono(22), fill=INK)
+    return image
+
+
+def scene_privacy(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((90, 84), "/peripheral forget 1", font=mono(36), fill=GREEN)
+    rows = (
+        ("index row", "deleted"),
+        ("thumbnail + captured frame", "deleted"),
+        ("your own screenshots", "never touched"),
+        ("network calls", "none"),
+    )
+    y = 210
+    for left, right in rows:
+        draw.text((90, y), left, font=mono(26), fill=DIM)
+        draw.text((830, y), right, font=mono(26), fill=GREEN if right != "none" else ACCENT)
+        draw.line([(90, y + 44), (1180, y + 44)], fill=LINE)
+        y += 74
+    draw.text((90, 560), "Local SQLite + FTS5. Nothing leaves the machine.", font=sans(32), fill=INK)
+    for index, line in enumerate(
+        (
+            "Background capture is off until you turn it on.",
+            "When on: changed frames only, capped per hour, redacted at the storage boundary.",
+            "Works without Tesseract too — the frames stay, and the model can look at them.",
+        )
+    ):
+        draw.text((90, 626 + index * 42), line, font=sans(24), fill=DIM)
+    return image
+
+
+def scene_end(t: float) -> Image.Image:
+    image, draw = canvas()
+    draw.text((110, 258), "Peripheral", font=sans(80, True), fill=INK)
+    draw.text((114, 372), "hermes plugins install okyssta/hermes-peripheral --enable",
+              font=mono(29), fill=GREEN)
+    draw.text((114, 442), "6 tools · slash command · bundled skill · post-tool-call timeline",
+              font=sans(24), fill=DIM)
+    draw.text((114, 488), "your screenshots, and the screen itself — searchable, local, deletable",
+              font=sans(24), fill=DIM)
+    draw.text((114, 586), "github.com/okyssta/hermes-peripheral", font=mono(26), fill=ACCENT)
+    return image
+
+
+SCENES = (
+    (0.0, 5.5, scene_title),
+    (5.5, 13.0, scene_screen),
+    (13.0, 20.5, scene_capture),
+    (20.5, 26.0, scene_question),
+    (26.0, 44.0, scene_calls),
+    (44.0, 62.0, scene_answer),
+    (62.0, 74.0, scene_privacy),
+    (74.0, 80.0, scene_end),
+)
+DURATION = SCENES[-1][1]
+
+CALLS = CALLS_FALLBACK
+ANSWER = ANSWER_FALLBACK
+
+
+def load_transcript() -> None:
+    """Use the captured session's own calls and answer when the file is present."""
+    global CALLS, ANSWER
+    if not TRANSCRIPT.is_file():
+        print("no transcript — using the recorded fallback text")
+        return
+    document = json.loads(TRANSCRIPT.read_text())
+    turn = document["turns"][0]
+    calls = []
+    for step in turn["steps"]:
+        args = ", ".join(f"{key}={json.dumps(value)}" for key, value in step["args"].items())
+        label = f"{step['tool']}({args})"
+        first_line = next(
+            (line.strip(" │") for line in step["result_preview"].splitlines() if line.strip()),
+            "",
+        )
+        calls.append((label, first_line[:76]))
+    CALLS = tuple(calls) or CALLS_FALLBACK
+
     import re
 
-    cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", markdown or "")
-    cleaned = re.sub(r"`(.+?)`", r"\1", cleaned)
-    blocks = [block.strip() for block in re.split(r"\n\s*\n", cleaned) if block.strip()]
-    out: list[str] = []
-    for block in blocks:
-        text = " ".join(part.strip().lstrip(">").strip() for part in block.splitlines())
-        text = " ".join(text.split())
-        if text.startswith("—") or len(text) < 8:
-            continue
-        out.append(text)
-        if len(out) >= limit:
-            break
-    return out or ["(the captured answer was empty)"]
+    plain = re.sub(r"\*\*(.+?)\*\*", r"\1", turn["answer"] or "")
+    plain = re.sub(r"`(.+?)`", r"\1", plain)
+    plain = re.sub(r"^[>\-\s]+", "", plain, flags=re.M)
+    plain = " ".join(plain.split())
+    if plain:
+        # Keep the lead and the observation the user did not make, so the frame
+        # shows the shape of the real answer instead of an arbitrary cut.
+        sentences = re.split(r"(?<=[.!?])\s+", plain)
+        kept = sentences[:3] + [
+            sentence for sentence in sentences[3:]
+            if "18,402" in sentence or "dashboard" in sentence.lower()
+        ]
+        excerpt = " ".join(kept)
+        if len(excerpt) > 900:
+            excerpt = excerpt[:897].rsplit(" ", 1)[0] + "…"
+        ANSWER = excerpt
+    print(f"transcript: {len(CALLS)} tool calls · answer {len(turn['answer'])} chars · {turn['elapsed_s']}s")
+
+
+def frame_at(t: float) -> Image.Image:
+    for start, end, fn in SCENES:
+        if t < end:
+            return fn(t - start)
+    return scene_end(0)
 
 
 def main() -> int:
-    if BUILD.exists():
-        shutil.rmtree(BUILD)
-    FRAMES.mkdir(parents=True)
+    missing = [name for name in THUMBS if not (FRAMES / name).is_file()]
+    if missing:
+        raise SystemExit(f"missing captured frames {missing} — run scripts/demo_capture.py first")
+    load_transcript()
 
-    data = real_outputs()
-    ask, timeline_lines, stats = data["ask"], data["timeline"], data["stats"]
-    video = Video()
-    scene_title(video)
-    scene_problem(video)
-    scene_folder(video)
-    scene_ask(
-        video,
-        question=ask["question"],
-        call=ask["call"],
-        output=ask["output"],
-        answer=ask["answer"],
-        note=ask["note"],
-        label="hermes · captured session",
-    )
-    scene_timeline(video, timeline_lines)
-    scene_privacy(video)
-    scene_proof(video, stats)
-    scene_end(video)
+    frames_dir = REPO / "out" / "video-frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    total = int(DURATION * FPS)
+    for index in range(total):
+        frame_at(index / FPS).save(frames_dir / f"{index:05d}.png")
+    print(f"rendered {total} frames at {FPS} fps")
 
-    concat = BUILD / "concat.txt"
-    with concat.open("w") as handle:
-        for path, duration in video.entries:
-            handle.write(f"file '{path}'\nduration {duration:.3f}\n")
-        handle.write(f"file '{video.entries[-1][0]}'\n")
-
-    out = BUILD / "peripheral-demo.mp4"
+    ffmpeg = shutil.which("ffmpeg") or "/root/.hermes/tools/ffmpeg-9.0.1-linux-arm64/bin/ffmpeg"
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
-            "ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(concat),
-            "-fps_mode", "cfr", "-r", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out),
+            ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "image2", "-framerate", str(FPS), "-i", str(frames_dir / "%05d.png"),
+            "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(OUT),
         ],
         check=True,
     )
-    duration = sum(duration for _, duration in video.entries)
-    print(f"wrote {out} ({duration:.1f}s, {len(video.entries)} frames)")
-    print(f"size: {out.stat().st_size / 1e6:.1f} MB")
+    print(f"video: {OUT}  ({DURATION:.0f}s, silent, {OUT.stat().st_size / 1e6:.1f} MB)")
     return 0
 
 

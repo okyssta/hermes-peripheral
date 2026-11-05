@@ -67,7 +67,12 @@ def results(query: str, shots: Sequence[Shot], *, total: int | None = None) -> s
     header += f" · nearest {shots[0].ago}"
     lines = [header, ""]
     for index, shot in enumerate(shots, start=1):
-        lines.append(f"[{shot.id}] {_when(shot)} · {shot.text_chars:,} chars · {_label(shot)}")
+        marker = ""
+        if shot.source == "capture":
+            marker = " · live"
+        elif shot.text_chars == 0:
+            marker = " · no text"
+        lines.append(f"[{shot.id}] {_when(shot)} · {shot.text_chars:,} chars{marker} · {_label(shot)}")
         snippet = _clean_snippet(shot.snippet.replace("<<", "").replace(">>", "") or shot.title)
         if snippet:
             lines.append(f"     “{snippet}”")
@@ -77,7 +82,10 @@ def results(query: str, shots: Sequence[Shot], *, total: int | None = None) -> s
         if index != len(shots):
             lines.append("")
     lines.append("")
-    lines.append("screen_show(id) opens one screen's full text; the path can be read with vision.")
+    lines.append(
+        "screen_show(id) opens one screen — full text, and the image itself when the model "
+        "can see it. screen_capture() remembers whatever is on screen right now."
+    )
     return "\n".join(lines)
 
 
@@ -90,20 +98,30 @@ def record(shot: Shot, *, body_chars: int = MAX_BODY) -> str:
         f"screen #{shot.id} · {_when(shot)} ({shot.ago})",
         f"path: {shot.path}",
     ]
+    if shot.source == "capture":
+        head.append("origin: captured by Peripheral (the frame is owned by the plugin)")
     if shot.thumb_path:
         head.append(f"thumb: {shot.thumb_path}")
     head.append(f"read: {shot.text_chars:,} characters of text")
     if shot.title:
         head.append(f"title: {shot.title}")
     if not body.strip():
-        body = "(no text was readable in this image — open the path to look at it)"
+        body = (
+            "(no text was readable in this image — the screen itself is attached when the "
+            "model supports vision; otherwise open the path with a vision tool)"
+        )
     return "\n".join(head) + "\n\n" + body
 
 
 def timeline(shots: Sequence[Shot], events: Iterable[dict], *, title: str = "Screen timeline") -> str:
     entries: list[tuple[float, str]] = []
     for shot in shots:
-        marker = "" if shot.kind == "screenshot" else " · photo"
+        if shot.source == "capture":
+            marker = " · live"
+        elif shot.kind == "photo" or shot.text_chars == 0:
+            marker = " · no text"
+        else:
+            marker = ""
         entries.append(
             (
                 shot.captured_at,
@@ -133,12 +151,13 @@ def timeline(shots: Sequence[Shot], events: Iterable[dict], *, title: str = "Scr
 def status_line() -> str:
     data = stats()
     if not data["count"]:
-        return "peripheral: nothing indexed yet — run /peripheral scan"
+        return "peripheral: nothing indexed yet — /peripheral scan, or let the agent screen_capture"
     first = human_age(data["first"]) if data["first"] else "?"
     last = human_age(data["last"]) if data["last"] else "?"
     size = data["bytes"] / (1024 * 1024)
+    captured = f" ({data['captured']:,} captured live)" if data.get("captured") else ""
     return (
-        f"peripheral: {data['count']:,} screens indexed ({first} → {last}) · "
+        f"peripheral: {data['count']:,} screens indexed{captured} ({first} → {last}) · "
         f"{data['chars']:,} chars of text · {data['events']:,} agent events · "
         f"{size:.1f} MB of source images"
     )

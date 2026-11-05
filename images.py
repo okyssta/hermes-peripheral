@@ -156,6 +156,56 @@ def save_thumbnail(source: str, destination: Path) -> str:
     return str(destination)
 
 
+def save_frame(source: str, destination: Path, *, max_edge: int = 1600, quality: int = 82) -> str:
+    """Store a captured screen as a compact WebP the index owns.
+
+    Captures are ours, not the user's: they are written under plugin-data and can
+    be deleted outright on ``forget``. 1600 px on the long edge keeps small UI text
+    legible to a vision model while staying around 100–250 KB per frame.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        image = _open(source).convert("RGB")
+        if max(image.size) > max_edge:
+            image.thumbnail((max_edge, max_edge))
+        image.save(destination, format="WEBP", quality=quality, method=3)
+    except Exception:
+        return ""
+    try:
+        return str(destination) if destination.stat().st_size > 0 else ""
+    except OSError:
+        return ""
+
+
+def data_url(path: str, *, max_edge: int = 1568, budget_chars: int = 900_000) -> str:
+    """A JPEG data URL small enough to attach to a tool result, or ''.
+
+    Downscales by steps and drops the JPEG quality until the base64 body fits the
+    budget, so attaching a screen can never wedge a turn on a provider size limit.
+    """
+    import base64
+    import io
+
+    try:
+        original = _open(path).convert("RGB")
+    except Exception:
+        return ""
+    for edge in (max_edge, 1200, 900, 700, 520):
+        candidate = original.copy()
+        if max(candidate.size) > edge:
+            candidate.thumbnail((edge, edge))
+        for quality in (82, 68, 55, 42):
+            buffer = io.BytesIO()
+            try:
+                candidate.save(buffer, format="JPEG", quality=quality, optimize=True)
+            except Exception:
+                return ""
+            payload = base64.b64encode(buffer.getvalue()).decode("ascii")
+            if len(payload) <= budget_chars:
+                return f"data:image/jpeg;base64,{payload}"
+    return ""
+
+
 def is_text_image(text: str, width: int, height: int) -> bool:
     """Screenshots and documents carry text; photos and art do not.
 

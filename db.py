@@ -205,9 +205,24 @@ def known_hashes() -> set[str]:
     return {row["sha256"] for row in _rows("SELECT sha256 FROM shots")}
 
 
-def recent_dhashes(limit: int = 4000) -> list[str]:
-    rows = _rows("SELECT dhash FROM shots WHERE dhash IS NOT NULL ORDER BY captured_at DESC LIMIT ?", (limit,))
+def recent_dhashes(limit: int = 4000, *, source: str | None = None) -> list[str]:
+    if source:
+        rows = _rows(
+            "SELECT dhash FROM shots WHERE dhash IS NOT NULL AND source = ? "
+            "ORDER BY captured_at DESC LIMIT ?",
+            (source, limit),
+        )
+    else:
+        rows = _rows("SELECT dhash FROM shots WHERE dhash IS NOT NULL ORDER BY captured_at DESC LIMIT ?", (limit,))
     return [row["dhash"] for row in rows if row["dhash"]]
+
+
+def shot_by_sha(sha256: str) -> Shot | None:
+    """The row for an image already indexed, by content hash."""
+    if not sha256:
+        return None
+    rows = _rows("SELECT * FROM shots WHERE sha256 = ? LIMIT 1", (sha256,))
+    return _row_to_shot(rows[0]) if rows else None
 
 
 _EVENT_WRITES = 0
@@ -238,6 +253,14 @@ def record_event(kind: str, name: str, detail: str = "", session_id: str = "", a
             conn.execute(
                 "DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY at DESC LIMIT 20000)"
             )
+        conn.commit()
+
+
+def set_title(shot_id: int, title: str) -> None:
+    """Give a screen a human label (the user's own note, or a correction)."""
+    conn = connect()
+    with _LOCK:
+        conn.execute("UPDATE shots SET title = ? WHERE id = ?", (str(title)[:120], int(shot_id)))
         conn.commit()
 
 
@@ -275,22 +298,44 @@ def _sweep_thumbs() -> int:
     return removed
 
 
-def forget(shot_id: int | None = None) -> int:
-    """Delete one entry, or the whole index — rows *and* the thumbnails this
-    plugin wrote for them. The user's original screenshots are never touched.
+def _sweep_frames() -> int:
+    """Remove every frame Peripheral captured under plugin-data/frames."""
+    try:
+        from plugins.plugin_storage import plugin_data_dir
 
-    A thumbnail is a full copy of the screen at 360 px: leaving it behind after
-    "forget" would make the promise false, so the files go with the rows.
+        root = plugin_data_dir(PLUGIN_ID) / "frames"
+    except Exception:  # pragma: no cover - storage API unavailable (tests stub it)
+        return 0
+    if not root.is_dir():
+        return 0
+    removed = 0
+    for path in root.rglob("*"):
+        if path.is_file() and _unlink(str(path)):
+            removed += 1
+    return removed
+
+
+def forget(shot_id: int | None = None) -> int:
+    """Delete one entry, or the whole index — rows *and* the image files this
+    plugin wrote. The user's original screenshots are never touched.
+
+    Two kinds of file can belong to a row: a 360 px thumbnail, and — for screens
+    Peripheral captured itself — the frame it wrote under ``plugin-data/frames``.
+    Leaving either behind after "forget" would make the promise false, so both go
+    with the rows. A path that lives outside plugin-data (the user's own
+    screenshots) is never unlinked.
     """
     conn = connect()
     with _LOCK:
         if shot_id is None:
             thumbs = thumbnails()
+            owned = owned_files()
             cursor = conn.execute("DELETE FROM shots")
             conn.execute("DELETE FROM files")
         else:
-            rows = _rows("SELECT thumb_path FROM shots WHERE id = ?", (shot_id,))
+            rows = _rows("SELECT thumb_path, path, source FROM shots WHERE id = ?", (shot_id,))
             thumbs = [row["thumb_path"] for row in rows if row["thumb_path"]]
+            owned = [row["path"] for row in rows if row["source"] == "capture" and row["path"]]
             cursor = conn.execute("DELETE FROM shots WHERE id = ?", (shot_id,))
             # Drop the bookkeeping too: "forget" must survive the next scan, and a
             # later /peripheral rescan should be able to bring the file back.
@@ -298,24 +343,43 @@ def forget(shot_id: int | None = None) -> int:
         conn.commit()
     # Outside the lock: unlinking is I/O, and a failure here must not roll back
     # the row deletion the user asked for.
-    for thumb in thumbs:
-        _unlink(thumb)
+    for path in {*thumbs, *owned}:
+        _unlink(path)
     if shot_id is None:
         _sweep_thumbs()
+        _sweep_frames()
     return int(cursor.rowcount or 0)
 
 
+def owned_files() -> list[str]:
+    """Every file the plugin captured itself (deletable, unlike the user's own)."""
+    return [
+        row["path"]
+        for row in _rows("SELECT path FROM shots WHERE source = 'capture' AND path != ''")
+        if row["path"]
+    ]
+
+
 def prune(retention_days: int, now: float | None = None) -> int:
-    """Drop entries older than the retention window."""
+    """Drop entries older than the retention window — rows and the files the
+    plugin wrote for them (thumbnails and captured frames)."""
     if retention_days <= 0:
         return 0
     cutoff = (now or time.time()) - retention_days * 86400
+    rows = _rows(
+        "SELECT thumb_path, path, source FROM shots WHERE captured_at < ?", (cutoff,)
+    )
+    files = [row["thumb_path"] for row in rows if row["thumb_path"]]
+    files += [row["path"] for row in rows if row["source"] == "capture" and row["path"]]
     conn = connect()
     with _LOCK:
         cursor = conn.execute("DELETE FROM shots WHERE captured_at < ?", (cutoff,))
         conn.execute("DELETE FROM files WHERE shot_id IS NULL OR shot_id NOT IN (SELECT id FROM shots)")
         conn.commit()
-        return int(cursor.rowcount or 0)
+        removed = int(cursor.rowcount or 0)
+    for path in files:
+        _unlink(path)
+    return removed
 
 
 def thumbnails() -> list[str]:
@@ -462,7 +526,28 @@ def search(
     kind: str | None = None,
     limit: int = 8,
 ) -> list[Shot]:
-    """Rank images by BM25, then re-rank with recency and text richness."""
+    """Rank images by BM25, then re-rank with recency and text richness.
+
+    When the strict token search finds nothing, a prefix fallback runs: OCR reads
+    ``expired_card`` as ``expired card`` and mangles suffixes (``payme!`` for
+    ``payment``), so a query that is one character off must not look like an empty
+    memory. The fallback is still a SQL query over the same index — no model call,
+    no scan of the user's files.
+    """
+    shots = _search_exact(text, since=since, until=until, kind=kind, limit=limit)
+    if shots:
+        return shots
+    return _search_prefix(text, since=since, until=until, kind=kind, limit=limit)
+
+
+def _search_exact(
+    text: str,
+    *,
+    since: float | None = None,
+    until: float | None = None,
+    kind: str | None = None,
+    limit: int = 8,
+) -> list[Shot]:
     query = fts_query(text)
     if not query:
         return []
@@ -508,6 +593,57 @@ def search(
     return scored[:limit]
 
 
+def _search_prefix(
+    text: str,
+    *,
+    since: float | None = None,
+    until: float | None = None,
+    kind: str | None = None,
+    limit: int = 8,
+) -> list[Shot]:
+    """Last-resort search: each term matched by its first four characters.
+
+    This exists for OCR noise, not for semantics: ``declinded`` finds ``declined``
+    because both start ``decl``. Terms shorter than four characters are skipped —
+    a three-letter prefix matches half the corpus and would turn an empty result
+    into a wrong one, which is worse than an honest miss.
+    """
+    terms = [term for term in split_terms(text) if len(term) >= 4]
+    if not terms:
+        return []
+    lowered = {term.lower(): term.lower()[:4] for term in terms}
+    clauses = ["lower(ocr_text) LIKE ?" for _ in lowered]
+    params: list[Any] = [f"%{prefix}%" for prefix in lowered.values()]
+    if since is not None:
+        clauses.append("captured_at >= ?")
+        params.append(since)
+    if until is not None:
+        clauses.append("captured_at <= ?")
+        params.append(until)
+    if kind:
+        clauses.append("kind = ?")
+        params.append(kind)
+    params.append(max(limit * 4, 20))
+    try:
+        rows = _rows(
+            f"SELECT * FROM shots WHERE {' AND '.join(clauses)} "
+            "ORDER BY captured_at DESC LIMIT ?",
+            params,
+        )
+    except sqlite3.OperationalError:  # pragma: no cover - defensive
+        return []
+    scored: list[Shot] = []
+    for row in rows:
+        body = (row["ocr_text"] or "").lower()
+        coverage = sum(1 for prefix in lowered.values() if prefix in body) / len(lowered)
+        if coverage < 0.5:
+            continue
+        shot = _row_to_shot(row, best_snippet(row["ocr_text"] or "", terms))
+        scored.append(Shot(**{**shot.__dict__, "score": coverage}))
+    scored.sort(key=lambda shot: (shot.score, shot.captured_at), reverse=True)
+    return scored[:limit]
+
+
 def get(shot_id: int) -> Shot | None:
     rows = _rows("SELECT * FROM shots WHERE id = ?", (shot_id,))
     if not rows:
@@ -545,7 +681,8 @@ def events_between(start: float, end: float, limit: int = 200) -> list[dict[str,
 def stats() -> dict[str, Any]:
     row = _rows(
         "SELECT COUNT(*) AS n, MIN(captured_at) AS first, MAX(captured_at) AS last, "
-        "SUM(text_chars) AS chars, SUM(bytes) AS bytes FROM shots"
+        "SUM(text_chars) AS chars, SUM(bytes) AS bytes, "
+        "SUM(CASE WHEN source = 'capture' THEN 1 ELSE 0 END) AS captured FROM shots"
     )[0]
     return {
         "count": int(row["n"] or 0),
@@ -553,6 +690,7 @@ def stats() -> dict[str, Any]:
         "last": row["last"],
         "chars": int(row["chars"] or 0),
         "bytes": int(row["bytes"] or 0),
+        "captured": int(row["captured"] or 0),
         "events": int((_rows("SELECT COUNT(*) AS n FROM events")[0])["n"] or 0),
     }
 

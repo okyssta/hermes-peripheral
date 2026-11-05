@@ -1,6 +1,6 @@
 name: peripheral
 label: Peripheral
-version: 1.0.1
+version: 2.0.0
 manifest_version: 2
 api_version: 1
 license: MIT
@@ -9,22 +9,26 @@ author: kyssta
 requires_hermes: ">=0.22.0"
 title: Peripheral — a memory of what you've seen
 description: >
-  Hermes gets a memory of your screen. Every screenshot you take — and optionally
-  every image you hand the agent — is read locally with OCR, indexed in SQLite
-  (FTS5) with the time it was captured, and made searchable by the agent through
-  four tools. Ask "what was that Stripe error yesterday?" or "what was I looking
-  at around 3?" and Hermes finds the exact screen, quotes the text, and can open
-  the image or act on what it says. A shared timeline interleaves what you saw
-  with what the agent did, so you can answer "what was on screen when Hermes
-  changed that config?". Everything stays on the machine: no account, no API key,
-  no network calls. Adds a /peripheral command for status, scan and forget.
-tags: [memory, screen, ocr, screenshots, local, search, timeline, privacy]
+  Hermes gets a memory of your screen. Peripheral captures the screen itself — on
+  request, or on change in the background — and indexes every screenshot already on
+  the machine, reading the text locally with OCR into SQLite/FTS5 with the time it
+  appeared. Six tools let the agent search that history by the words that were on
+  screen, reconstruct a period on one clock with its own actions, open a screen and
+  see the image itself, remember the current screen, and forget what the user asks
+  it to forget. Ask "what was that Stripe error yesterday?" or "what was I looking
+  at around 3?" and Hermes finds the exact screen and quotes it — even after the
+  window is closed and the screenshot file is gone. No OCR? It still works as a
+  visual memory. Everything stays on the machine: no account, no API key, no
+  network calls.
+tags: [memory, screen, capture, ocr, screenshots, local, search, timeline, privacy, vision]
 
 provides_tools:
   - screen_recall
   - screen_timeline
   - screen_show
   - screen_index
+  - screen_capture
+  - screen_forget
 
 provides_hooks:
   - post_tool_call
@@ -35,6 +39,35 @@ config_schema:
     default: true
     label: Enabled
     description: Index screenshots and answer screen-memory queries
+  capture_enabled:
+    type: bool
+    default: false
+    label: Background capture
+    description: >-
+      Capture the screen on a timer and keep a frame only when it changed. Off by
+      default; the agent can always capture on request with screen_capture
+  capture_interval_seconds:
+    type: int
+    default: 30
+    label: Capture interval (seconds)
+    description: How often the background capture looks at the screen (5-3600)
+  capture_min_gap_seconds:
+    type: int
+    default: 15
+    label: Minimum gap between frames (seconds)
+    description: Do not store another frame sooner than this, even if the screen changed
+  capture_max_per_hour:
+    type: int
+    default: 120
+    label: Maximum frames per hour
+    description: A hard ceiling so a video call or a game cannot fill the disk
+  show_images:
+    type: bool
+    default: true
+    label: Show screens to the model
+    description: >-
+      Attach the stored image to screen_show / screen_capture results when the
+      active model can see images. Off means text only
   watch_dirs:
     type: list
     default: []

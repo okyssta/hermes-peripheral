@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from . import db, ingest, render
+from . import capture, db, ingest, render
 from .settings import Settings
 
 
@@ -41,6 +41,7 @@ def handle(raw_args: str = "", **kwargs: Any) -> str:
             render.status_line(),
             "",
             settings.describe(),
+            capture.describe(),
         ]
         if not settings.watch_dirs:
             notes.append("")
@@ -48,13 +49,48 @@ def handle(raw_args: str = "", **kwargs: Any) -> str:
         return "\n".join(notes)
 
     if lowered in {"config", "settings"}:
-        return settings.describe()
+        return settings.describe() + "\n" + capture.describe()
 
     if lowered in {"scan", "index", "sync"}:
         return _scan_report(ingest.scan(settings, batch=120, force=False))
 
     if lowered in {"rescan", "reindex"}:
         return _scan_report(ingest.scan(settings, batch=120, force=True))
+
+    if lowered.startswith("capture"):
+        note = text.split(" ", 1)[1].strip() if " " in text else ""
+        outcome = ingest.capture_and_ingest(settings, force=True)
+        lines = [outcome.line()]
+        if outcome.shot_id:
+            shot = db.get(outcome.shot_id)
+            if shot is not None:
+                if note:
+                    db.set_title(shot.id, note)
+                lines.append("")
+                lines.append(render.record(shot, body_chars=1200))
+        elif not outcome.ok:
+            lines.append(capture.describe())
+        lines.append("")
+        lines.append(capture.describe())
+        return "\n".join(lines)
+
+    if lowered.startswith("watch"):
+        rest = lowered[5:].strip()
+        if rest in {"on", "start"}:
+            _set("capture_enabled", True)
+            return (
+                "background capture on: a frame is kept only when the screen changes, "
+                f"at most every {settings.capture_interval_seconds}s and "
+                f"{settings.capture_max_per_hour}/hour. /peripheral watch off stops it."
+            )
+        if rest in {"off", "stop"}:
+            _set("capture_enabled", False)
+            return "background capture off. Screens captured so far stay until you forget them."
+        return (
+            f"{capture.describe()}\n"
+            f"background capture: {'on' if settings.capture_enabled else 'off'}\n"
+            "/peripheral watch on|off"
+        )
 
     if lowered.startswith("pause"):
         _set("enabled", False)
@@ -69,9 +105,9 @@ def handle(raw_args: str = "", **kwargs: Any) -> str:
         if target == "all":
             removed = db.forget(None)
             return (
-                f"forgotten: {removed} entries and their thumbnails removed from the index. "
-                "The image files themselves are untouched — delete those in the folder if "
-                "you want them gone."
+                f"forgotten: {removed} entries removed from the index, with every thumbnail "
+                "and captured frame the plugin wrote. Screenshots you took yourself are untouched "
+                "— delete those in the folder if you want them gone."
             )
         try:
             shot_id = int(target)
@@ -81,8 +117,8 @@ def handle(raw_args: str = "", **kwargs: Any) -> str:
         if not removed:
             return f"No screen with id {shot_id}."
         return (
-            f"forgotten: screen #{shot_id} and its thumbnail are out of the index "
-            "(the original image file is untouched)."
+            f"forgotten: screen #{shot_id} is out of the index, with the file the plugin wrote "
+            "for it. A screenshot you took yourself is never deleted."
         )
 
     if lowered.startswith("timeline"):
@@ -142,7 +178,9 @@ def _set(key: str, value: Any) -> None:
 
 
 _HELP = (
-    "/peripheral              status: what is indexed, where it looks, how OCR is set up\n"
+    "/peripheral              status: what is indexed, where it looks, capture and OCR readiness\n"
+    "/peripheral capture [note]  remember what is on screen right now\n"
+    "/peripheral watch on|off    background capture on change (off by default)\n"
     "/peripheral scan         index new screenshots now\n"
     "/peripheral rescan       re-read every file (after changing OCR languages)\n"
     "/peripheral <words>      search the screen history\n"

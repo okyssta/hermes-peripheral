@@ -27,6 +27,11 @@ SCHEMA_KEYS = (
     "redact",
     "thumbnails",
     "record_agent_events",
+    "capture_enabled",
+    "capture_interval_seconds",
+    "capture_min_gap_seconds",
+    "capture_max_per_hour",
+    "show_images",
 )
 
 # Directories that hold screenshots on each platform, most specific first. Only
@@ -104,6 +109,11 @@ class Settings:
     redact: bool = True
     thumbnails: bool = True
     record_agent_events: bool = True
+    capture_enabled: bool = False
+    capture_interval_seconds: int = 30
+    capture_min_gap_seconds: int = 15
+    capture_max_per_hour: int = 120
+    show_images: bool = True
 
     @property
     def languages(self) -> list[str]:
@@ -149,10 +159,21 @@ class Settings:
             redact=_bool(value("redact", True), True),
             thumbnails=_bool(value("thumbnails", True), True),
             record_agent_events=_bool(value("record_agent_events", True), True),
+            capture_enabled=_bool(value("capture_enabled", False), False),
+            capture_interval_seconds=_int(value("capture_interval_seconds", 30), 30, 5, 3600),
+            capture_min_gap_seconds=_int(value("capture_min_gap_seconds", 15), 15, 0, 3600),
+            capture_max_per_hour=_int(value("capture_max_per_hour", 120), 120, 1, 3600),
+            show_images=_bool(value("show_images", True), True),
         )
 
     def describe(self) -> str:
         dirs: Iterable[str] = (str(path) for path in self.watch_dirs)
+        capture = (
+            f"background capture: every {self.capture_interval_seconds}s "
+            f"(max {self.capture_max_per_hour}/hour)"
+            if self.capture_enabled
+            else "background capture: off (the agent can still capture on request)"
+        )
         return "\n".join(
             [
                 f"enabled: {self.enabled}",
@@ -161,8 +182,10 @@ class Settings:
                 f"background scan: every {self.auto_scan_minutes} min"
                 if self.auto_scan_minutes
                 else "background scan: off",
+                capture,
                 f"photos: {'indexed' if self.include_photos else 'skipped'}",
                 f"redaction: {'on' if self.redact else 'off'}",
+                f"images in results: {'attached' if self.show_images else 'text only'}",
                 f"retention: {self.retention_days or 'forever'}",
             ]
         )

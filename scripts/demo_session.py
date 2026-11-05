@@ -28,7 +28,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, "/root/.hermes/hermes-agent")
 
-os.environ["HERMES_HOME"] = os.environ.get("DEMO_HERMES_HOME", "/tmp/peripheral-demo-home")
+os.environ["HERMES_HOME"] = (
+    os.environ.get("DEMO_HERMES_HOME")
+    or os.environ.get("HERMES_HOME")
+    or "/tmp/peripheral-demo-home"
+)
 
 from peripheral import schemas, tools  # noqa: E402
 from peripheral.settings import Settings  # noqa: E402
@@ -38,11 +42,12 @@ MODEL = os.environ.get("PERIPHERAL_DEMO_MODEL", "deepseek-v4.1-flash")
 
 SYSTEM = (
     "You are Hermes, a personal agent running on the user's own machine. You have screen "
-    "memory tools: screen_recall, screen_timeline, screen_show, screen_index. Use them when "
-    "the user refers to something they saw rather than something they typed. Quote what the "
-    "screen actually says; never invent a screen or a detail. A day the user names ('Monday') "
-    "is a since/until window rather than a reason to give up: search the words that would "
-    "have been on the screen, widen once if nothing matches, and answer in a few sentences."
+    "memory tools: screen_recall, screen_timeline, screen_show, screen_index, screen_capture, "
+    "screen_forget. Use them when the user refers to something they saw rather than something "
+    "they typed, or asks what is on their screen right now. Quote what the screen actually "
+    "says; never invent a screen or a detail. A day the user names ('Monday') is a "
+    "since/until window rather than a reason to give up: search the words that would have "
+    "been on the screen, widen once if nothing matches, and answer in a few sentences."
 )
 
 HANDLERS = {
@@ -50,7 +55,16 @@ HANDLERS = {
     "screen_timeline": tools.screen_timeline,
     "screen_show": tools.screen_show,
     "screen_index": tools.screen_index,
+    "screen_capture": tools.screen_capture,
+    "screen_forget": tools.screen_forget,
 }
+
+
+def as_text(result) -> str:
+    """Tool results are text, or a multimodal envelope carrying the same text."""
+    if isinstance(result, dict):
+        return str(result.get("text_summary") or "")
+    return str(result)
 
 REPO = Path(__file__).resolve().parents[1]
 TRANSCRIPT_JSON = Path(
@@ -129,7 +143,7 @@ def run_turn(question: str, *, key: str, verbose: bool = True, max_steps: int = 
                 args = {}
             if verbose:
                 print(f"  \033[2m⚙ {name}({json.dumps(args)[:110]})\033[0m")
-            result = HANDLERS[name](args)
+            result = as_text(HANDLERS[name](args))
             if verbose:
                 head = "\n".join(result.splitlines()[:10])
                 print("\n".join(f"  \033[2m│ {line}\033[0m" for line in head.splitlines()))
@@ -176,7 +190,7 @@ def render_text(document: dict) -> str:
         f"model    : {document['model']}",
         f"index    : {document['index']}",
         "",
-        "The model was given the plugin's four tool schemas and the user's question;",
+        "The model was given the plugin's six tool schemas and the user's question;",
         "every tool call and answer below came back from the provider, not from this script.",
         "Re-run scripts/demo_session.py (see README) to reproduce it.",
     ]
@@ -195,12 +209,20 @@ def render_text(document: dict) -> str:
 
 def main() -> int:
     key = api_key()
-    folder = Path(os.environ.get("PERIPHERAL_DEMO_DIR", "/root/demo-screens/Screenshots"))
-    settings = Settings(watch_dirs=(folder,), auto_scan_minutes=0)
-    from peripheral import ingest
+    from peripheral import db, capture
 
-    report = ingest.scan(settings, batch=40)
-    index_line = report.line()
+    if os.environ.get("PERIPHERAL_DEMO_SCAN"):
+        folder = Path(os.environ["PERIPHERAL_DEMO_SCAN"])
+        settings = Settings(watch_dirs=(folder,), auto_scan_minutes=0)
+        from peripheral import ingest
+
+        index_line = ingest.scan(settings, batch=40).line()
+    else:
+        data = db.stats()
+        index_line = (
+            f"{data['count']} screens ({data['captured']} captured live), "
+            f"{data['chars']:,} chars of OCR text · {capture.describe()}"
+        )
     print(f"index: {index_line}")
 
     document = {
