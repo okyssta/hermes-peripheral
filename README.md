@@ -244,7 +244,7 @@ This plugin looks at your screen, so it is built to be boring about it:
 
 ```bash
 uv venv /tmp/peripheral-venv && uv pip install --python /tmp/peripheral-venv/bin/python -r requirements-dev.txt
-/tmp/peripheral-venv/bin/python -m pytest tests -q   # 60 passed
+/tmp/peripheral-venv/bin/python -m pytest tests -q   # 64 passed
 hermes plugins validate .                 # Validation passed (security scan: safe)
 python3 scripts/check_release.py          # release tag == catalog pin == shipped dossier
 ```
@@ -260,9 +260,11 @@ forget (rows **and** thumbnails **and** captured frames), redaction of OCR text 
 agent event details, FTS operator injection, time-expression parsing, `before`/`since`
 bounds, the capture backends' argv construction (no shell, no display means no
 command), capture dedupe and the change gate, the no-OCR visual index, the multimodal
-result envelope, the vision gate (explicit override wins, the host is asked when it is
-absent, a raising or missing host gate is text-only), and a manifest contract test that
-keeps `plugin.yaml` and the code naming the same things.
+result envelope, the vision gate (explicit flags, `image_input_mode`, per-model overrides,
+quoted strings ignored, an unreadable config failing closed), a locked index (the event
+log drops the row in milliseconds instead of queueing behind another process's write
+lock), and a manifest contract test that keeps `plugin.yaml` and the code naming the same
+things.
 
 ### Does a screen actually reach the model?
 

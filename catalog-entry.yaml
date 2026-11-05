@@ -44,7 +44,7 @@ maintainer: okyssta
 tier: community
 category: tools
 requires_hermes: ">=0.22.0"
-version: "2.1.0"
+version: "2.1.1"
 docs_url: https://github.com/okyssta/hermes-peripheral#readme
 platforms: []
 capabilities:

@@ -16,12 +16,19 @@ import re
 import sqlite3
 import threading
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 PLUGIN_ID = "peripheral"
 SCHEMA_VERSION = 1
+
+# Hermes opens plugin databases with a 5 s busy timeout; that is right for a tool
+# that writes once per call, wrong for the `post_tool_call` observer that writes
+# after every tool call. 1.5 s is long enough for a competing writer to commit and
+# short enough to disappear inside a turn.
+BUSY_TIMEOUT_MS = 1500
 
 _LOCK = threading.RLock()
 _CONN: sqlite3.Connection | None = None
@@ -144,6 +151,11 @@ def connect() -> sqlite3.Connection:
         from plugins.plugin_storage import plugin_db
 
         conn = plugin_db(PLUGIN_ID)
+        # `post_tool_call` writes here after every tool call, so the plugin caps its
+        # own wait instead of inheriting the 5 s default: a second Hermes process on
+        # the same profile holding the write lock must cost one skipped event, not a
+        # five-second stall in the middle of a turn.
+        conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         conn.row_factory = sqlite3.Row
         conn.executescript(_SCHEMA)
         row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
@@ -228,7 +240,7 @@ def shot_by_sha(sha256: str) -> Shot | None:
 _EVENT_WRITES = 0
 
 
-def record_event(kind: str, name: str, detail: str = "", session_id: str = "", at: float | None = None) -> None:
+def record_event(kind: str, name: str, detail: str = "", session_id: str = "", at: float | None = None) -> bool:
     """Append one agent event. The log is capped so a long-lived install cannot
     grow it without bound: every 500 writes, the oldest rows beyond 20k go.
 
@@ -237,6 +249,11 @@ def record_event(kind: str, name: str, detail: str = "", session_id: str = "", a
     every caller to remember. The README and the catalog disclosure both promise
     that no secret is written to disk; this is what makes that true for events
     as well as for OCR text.
+
+    Never waits for a lock: this is called from ``post_tool_call``, once per tool
+    call, and a second Hermes process on the same profile must cost a skipped
+    timeline row rather than a stall inside the turn. Returns False when the event
+    was dropped.
     """
     global _EVENT_WRITES
     from .ocr import redact
@@ -244,16 +261,27 @@ def record_event(kind: str, name: str, detail: str = "", session_id: str = "", a
     safe_detail = redact(str(detail or ""))[:400]
     conn = connect()
     with _LOCK:
-        conn.execute(
-            "INSERT INTO events (at, kind, name, detail, session_id) VALUES (?, ?, ?, ?, ?)",
-            (at or time.time(), kind, name[:120], safe_detail, session_id[:120]),
-        )
-        _EVENT_WRITES += 1
-        if _EVENT_WRITES % 500 == 0:
+        conn.execute("PRAGMA busy_timeout=0")
+        try:
             conn.execute(
-                "DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY at DESC LIMIT 20000)"
+                "INSERT INTO events (at, kind, name, detail, session_id) VALUES (?, ?, ?, ?, ?)",
+                (at or time.time(), kind, name[:120], safe_detail, session_id[:120]),
             )
-        conn.commit()
+            _EVENT_WRITES += 1
+            if _EVENT_WRITES % 500 == 0:
+                conn.execute(
+                    "DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY at DESC LIMIT 20000)"
+                )
+            conn.commit()
+            return True
+        except sqlite3.OperationalError:
+            # Locked or busy: the tool call this describes matters more than the row.
+            with suppress(Exception):
+                conn.rollback()
+            return False
+        finally:
+            with suppress(Exception):
+                conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
 
 
 def set_title(shot_id: int, title: str) -> None:

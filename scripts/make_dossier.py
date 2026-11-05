@@ -226,6 +226,12 @@ MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
       <td>the demo's first screen was captured, then the browser was closed and replaced twice; <code>screen_recall("card declined")</code> still returned it, and all three screens matched a single question</td></tr>
   <tr><td>Forget removes the pixels, not just the row</td><td><span class="tag ok">demonstrated</span></td>
       <td><code>test_forget_deletes_a_captured_frame_and_spares_a_user_screenshot</code>, <code>test_forget_all_clears_captured_frames_and_keeps_user_files</code>; live probe in the transcript of the forget run</td></tr>
+  <tr><td>A locked index cannot stall a turn</td><td><span class="tag ok">demonstrated</span></td>
+      <td>measured with an exclusive lock held by a second connection: five <code>post_tool_call</code> events took
+      <strong>25.0 s</strong> before 2.1.1 (Hermes' 5 s busy timeout, inherited), <strong>7.5 s</strong> with only that
+      timeout capped, and <strong>3 ms</strong> once the event log stopped waiting at all — the row is dropped and the tool call
+      proceeds (<code>tests/test_locked_db.py</code>). Reads and the timeline kept answering throughout, because WAL lets
+      readers through</td></tr>
   <tr><td>Works without Tesseract (visual index)</td><td><span class="tag ok">demonstrated</span></td>
       <td><code>test_a_machine_without_ocr_still_builds_a_visual_index</code> — image stored, timeline lists it, marked <code>no text</code></td></tr>
   <tr><td>No network calls, no telemetry</td><td><span class="tag ok">demonstrated</span></td>
@@ -347,6 +353,10 @@ python3 scripts/make_dossier.py</pre>
       internals (rule 9); a catalogue-only vision model falls back to text and the model asks with <code>image: true</code></td></tr>
   <tr><td>Dev deps (2.1.0)</td><td><code>requirements-dev.txt</code> declares the test-only packages (pytest, Pillow, PyYAML); a fresh clone can
       reproduce the suite without being told which module the harness imports</td></tr>
+  <tr><td>Locked index (2.1.1)</td><td><code>db.record_event</code> — the write that <code>post_tool_call</code> makes after every tool
+      call — no longer queues behind a lock another process holds: it attempts the insert with no busy wait, drops the row if the
+      index is busy, and restores the 1.5 s cap for everything else. Measured under an exclusive lock: 25.0 s of stall across five
+      tool events before, 3 ms after</td></tr>
   <tr><td>Docs</td><td>2.0.2: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice), and <code>scripts/check_release.py</code> now proves tag == pin and that the shipped PDF is the recorded build; the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 
