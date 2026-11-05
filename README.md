@@ -19,6 +19,8 @@ Nothing leaves the machine. No account, no API key, no capture daemon, no cloud
 index. One SQLite file and a folder of thumbnails, both inside the profile's own
 plugin-data directory, both deletable with a command.
 
+**[74-second demo (silent)](docs/demo.mp4)** · **[verification dossier (PDF)](docs/peripheral-dossier.pdf)**
+
 ---
 
 ## Why this exists
