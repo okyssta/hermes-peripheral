@@ -1,0 +1,97 @@
+name: peripheral
+label: Peripheral
+version: 1.0.0
+manifest_version: 2
+api_version: 1
+license: MIT
+homepage: https://github.com/kyssta-exe/hermes-peripheral
+author: kyssta
+requires_hermes: ">=0.22.0"
+title: Peripheral — a memory of what you've seen
+description: >
+  Hermes gets a memory of your screen. Every screenshot you take — and optionally
+  every image you hand the agent — is read locally with OCR, indexed in SQLite
+  (FTS5) with the time it was captured, and made searchable by the agent through
+  four tools. Ask "what was that Stripe error yesterday?" or "what was I looking
+  at around 3?" and Hermes finds the exact screen, quotes the text, and can open
+  the image or act on what it says. A shared timeline interleaves what you saw
+  with what the agent did, so you can answer "what was on screen when Hermes
+  changed that config?". Everything stays on the machine: no account, no API key,
+  no network calls. Adds a /peripheral command for status, scan and forget.
+tags: [memory, screen, ocr, screenshots, local, search, timeline, privacy]
+
+provides_tools:
+  - screen_recall
+  - screen_timeline
+  - screen_show
+  - screen_index
+
+provides_hooks:
+  - post_tool_call
+
+config_schema:
+  enabled:
+    type: bool
+    default: true
+    label: Enabled
+    description: Index screenshots and answer screen-memory queries
+  watch_dirs:
+    type: list
+    default: []
+    label: Folders to index
+    description: >-
+      Folders scanned for images. Empty means auto-detect (the usual screenshot
+      folders for this OS, plus Hermes' own inbound media folder)
+  ocr_languages:
+    type: str
+    default: "eng"
+    label: OCR languages
+    description: >-
+      Tesseract language codes, "+"-joined (eng, deu, fra, spa, ita, por, nld,
+      rus, ara, urd, chi_sim, jpn, kor). Missing packs are skipped with a warning
+  auto_scan_minutes:
+    type: int
+    default: 10
+    label: Background scan interval (minutes)
+    description: >-
+      How often to look for new screenshots in the background. 0 disables the
+      background scan; queries still index new files first
+  include_photos:
+    type: bool
+    default: false
+    label: Index photos too
+    description: >-
+      Also index images with almost no text (photos, art). Off by default: they
+      cost OCR time and add nothing to text search
+  max_text_chars:
+    type: int
+    default: 20000
+    label: Max characters kept per image
+    description: OCR text beyond this is dropped (200-200000)
+  retention_days:
+    type: int
+    default: 0
+    label: Retention (days)
+    description: >-
+      Drop entries older than this on every scan. 0 keeps everything
+  redact:
+    type: bool
+    default: true
+    label: Redact secrets
+    description: >-
+      Strip API keys, bearer tokens, private keys and card numbers from indexed
+      text before it is stored
+  thumbnails:
+    type: bool
+    default: true
+    label: Keep thumbnails
+    description: >-
+      Store a 360px thumbnail per image, so a screenshot still resolves after the
+      original is deleted
+  record_agent_events:
+    type: bool
+    default: true
+    label: Record agent activity
+    description: >-
+      Record the agent's tool calls next to your screenshots, so the timeline can
+      interleave what you saw with what Hermes did
