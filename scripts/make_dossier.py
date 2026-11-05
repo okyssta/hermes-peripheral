@@ -331,7 +331,7 @@ python3 scripts/make_dossier.py</pre>
   <tr><td>Search</td><td>prefix fallback for OCR noise, with an honest-miss test</td></tr>
   <tr><td>Surface</td><td><code>/peripheral capture</code>, <code>/peripheral watch on|off</code>, capture readiness in status; skill rewritten</td></tr>
   <tr><td>Tests</td><td>27 → {tests}</td></tr>
-  <tr><td>Docs</td><td>2.0.1: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice); the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
+  <tr><td>Docs</td><td>2.0.2: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice), and <code>scripts/check_release.py</code> now proves tag == pin and that the shipped PDF is the recorded build; the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 
 <footer>Peripheral {version} · release <span class="mono">{tag}</span> · dossier generated from the repository at

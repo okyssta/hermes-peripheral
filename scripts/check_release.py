@@ -70,6 +70,7 @@ def main() -> int:
     else:
         notes.append(f"version {version} agrees in plugin.yaml and catalog-entry.yaml")
 
+    head = sh("git", "rev-parse", "HEAD")
     if not pin:
         failures.append("catalog-entry.yaml has no sha")
     tag_commit = sh("git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}") if tag else ""
@@ -79,6 +80,12 @@ def main() -> int:
             notes.append(message + " (--pre-tag: skipping the pin check)")
         else:
             failures.append(message + " — tag the release commit before pinning the catalog")
+    elif head == tag_commit:
+        # Reading the release commit's own tree: its copy of the entry pins the previous
+        # release, because no file can pin the commit that contains it. The tag is the
+        # proof that matters here.
+        notes.append(f"checked out at the release commit {tag_commit[:12]} (= tag {tag}); "
+                     "its mirror entry names the previous release, as it must")
     elif pin and tag_commit != pin:
         failures.append(f"catalog pins {pin[:12]} but tag {tag} is {tag_commit[:12]}")
     else:
