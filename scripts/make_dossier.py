@@ -83,6 +83,13 @@ def build_html() -> str:
     facts = transcript_facts()
     tests = count_tests()
     commit = sh("git", "rev-parse", "HEAD")
+    pin = ""
+    catalog = REPO / "catalog-entry.yaml"
+    if catalog.is_file():
+        for line in catalog.read_text().splitlines():
+            if line.startswith("sha:"):
+                pin = line.split(":", 1)[1].strip()
+                break
     branch = sh("git", "rev-parse", "--abbrev-ref", "HEAD")
     duration = video_seconds()
     video_size = (DOCS / "demo.mp4").stat().st_size if (DOCS / "demo.mp4").is_file() else 0
@@ -156,8 +163,9 @@ def build_html() -> str:
 <div class="kicker">Hermes plugin hackathon · verification dossier</div>
 <h1>Peripheral</h1>
 <div class="sub">A memory of what was on your screen — hands-on verification, claim by claim.</div>
-<p class="lede">Version 2.0.0 · commit <span class="mono">{commit[:12]}</span> ({html.escape(branch)}) ·
-docs built {when} · MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
+<p class="lede">Version 2.0.0 · catalog pin <span class="mono">{(pin or commit)[:12]}</span> ·
+docs built from <span class="mono">{commit[:12]}</span> ({html.escape(branch)}) · {when} ·
+MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
 
 <blockquote>
   <strong>The claim.</strong> Hermes can look at the screen right now; it cannot answer for a screen
