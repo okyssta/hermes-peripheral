@@ -98,7 +98,10 @@ def _on_post_tool_call(tool_name: str = "", args: Any = None, **kwargs: Any) -> 
         name = str(tool_name or "").strip()
         if not name or name.startswith("screen_"):
             return
-        db.record_event("tool", name, _detail_from_args(args), str(kwargs.get("session_id") or ""))
+        # Redact before truncating: a half-cut `--password=` value would slip
+        # past the patterns if the cut happened first.
+        detail = ocr.redact(_detail_from_args(args))[:160]
+        db.record_event("tool", name, detail, str(kwargs.get("session_id") or ""))
     except Exception:  # pragma: no cover - an observer must never disturb a turn
         logger.debug("peripheral: could not record tool event", exc_info=True)
 

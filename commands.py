@@ -69,8 +69,9 @@ def handle(raw_args: str = "", **kwargs: Any) -> str:
         if target == "all":
             removed = db.forget(None)
             return (
-                f"forgotten: {removed} entries removed from the index. The image files themselves "
-                "are untouched — delete those in the folder if you want them gone."
+                f"forgotten: {removed} entries and their thumbnails removed from the index. "
+                "The image files themselves are untouched — delete those in the folder if "
+                "you want them gone."
             )
         try:
             shot_id = int(target)
@@ -79,7 +80,10 @@ def handle(raw_args: str = "", **kwargs: Any) -> str:
         removed = db.forget(shot_id)
         if not removed:
             return f"No screen with id {shot_id}."
-        return f"forgotten: screen #{shot_id} is out of the index (the image file is untouched)."
+        return (
+            f"forgotten: screen #{shot_id} and its thumbnail are out of the index "
+            "(the original image file is untouched)."
+        )
 
     if lowered.startswith("timeline"):
         rest = text[8:].strip()
@@ -107,16 +111,23 @@ def handle(raw_args: str = "", **kwargs: Any) -> str:
 
     # Anything else is a search.
     query = text
-    since = None
+    since = until = None
     for separator in (" since ", " after ", " before "):
         if separator in lowered:
             head, _, tail = text.partition(separator)
             query = head.strip()
             from .tools import parse_when
 
-            since = parse_when(tail.strip(), end=separator == " before ")
+            bound = parse_when(tail.strip())
+            # "since/after X" is a lower bound, "before X" an upper one: feeding
+            # both into `since` made "before" search the complement of what was
+            # asked for.
+            if separator == " before ":
+                until = bound
+            else:
+                since = bound
             break
-    shots = db.search(query, since=since, limit=8)
+    shots = db.search(query, since=since, until=until, limit=8)
     if not shots:
         return render.results(query, shots) + f"\n\n{render.status_line()}"
     return render.results(query, shots, total=db.stats()["count"])

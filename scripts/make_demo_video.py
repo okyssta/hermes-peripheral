@@ -163,10 +163,11 @@ def scene_ask(
     output: list[str],
     answer: list[str],
     label: str,
+    note: str = "",
 ) -> None:
     mono = font(FONT_MONO, 27)
     mono_small = font(FONT_MONO, 24)
-    body = font(FONT_REG, 29)
+    body = font(FONT_REG, 27)
 
     def base(draw, typed_text: str, stage: int):
         draw.text((110, 80), label, font=font(FONT_MONO, 22), fill=DIM)
@@ -174,19 +175,23 @@ def scene_ask(
         draw.text((110, 140), "❯", font=font(FONT_MONO_BOLD, 30), fill=GREEN)
         draw.text((160, 143), typed_text, font=mono, fill=TEXT)
         if stage >= 1:
-            draw.text((150, 210), f"⚙ {call}", font=mono_small, fill=AMBER)
+            draw.text((150, 205), f"⚙ {call}", font=mono_small, fill=AMBER)
         if stage >= 2:
-            y = 270
+            y = 255
             for line in output:
                 draw.text((160, y), line, font=mono_small, fill=DIM if line.startswith(" ") else BLUE)
-                y += 34
+                y += 32
         if stage >= 3:
-            y = 270 + len(output) * 34 + 30
+            y = 255 + len(output) * 32 + 26
             for paragraph in answer:
                 for line in wrap(draw, paragraph, body, W - 260):
+                    if y > H - 90:
+                        break
                     draw.text((160, y), line, font=body, fill=TEXT)
-                    y += 40
-                y += 12
+                    y += 36
+                y += 22
+        if note:
+            draw.text((110, H - 58), note, font=font(FONT_MONO, 20), fill=DIM)
 
     def factory(stage: int):
         return lambda draw, image: base(draw, question, stage)
@@ -240,17 +245,11 @@ def scene_privacy(video: Video) -> None:
     video.hold(draw, 8.0)
 
 
-def scene_proof(video: Video) -> None:
+def scene_proof(video: Video, stats: list[tuple[str, str]]) -> None:
     def draw(draw, image):
         draw.text((110, 110), "measured, not claimed", font=font(FONT_MONO, 24), fill=GREEN)
-        stats = [
-            ("22", "tests: real PNGs → Tesseract → FTS5"),
-            ("10.6 s", "10 screens at 1440×900 indexed"),
-            ("1.06 s", "per screen, 2 vCPU ARM, no GPU"),
-            ("safe", "hermes plugins validate — security scan"),
-        ]
         y = 210
-        for number, label in stats:
+        for number, label in stats[:4]:
             draw.text((130, y), number, font=font(FONT_BOLD, 64), fill=BLUE)
             draw.text((420, y + 18), label, font=font(FONT_REG, 30), fill=TEXT)
             y += 120
@@ -271,44 +270,115 @@ def scene_end(video: Video) -> None:
 
 # ---------------------------------------------------------------- assemble
 
-def real_outputs() -> tuple[list[str], list[str]]:
-    """Pull the tool output the video shows straight from the plugin."""
-    os.environ.setdefault("HERMES_HOME", "/root/.hermes/profiles/main")
-    from peripheral import db, render, tools
+def real_outputs() -> dict:
+    """Everything the video shows comes from the plugin and the captured session.
+
+    The index is built in a throwaway HERMES_HOME so the video never depends on (or
+    pollutes) the developer's own screen history, and the Q&A scene is rendered from
+    `docs/demo-transcript.json` — the file `scripts/demo_session.py` wrote when a
+    model actually called these tools — rather than from text typed into this script.
+    """
+    os.environ["HERMES_HOME"] = DEMO_HOME = os.environ.get(
+        "DEMO_HERMES_HOME", "/tmp/peripheral-demo-home"
+    )
+    from peripheral import db, ingest, render, tools
     from peripheral.settings import Settings
 
     import peripheral
 
+    folder = "/root/demo-screens/Screenshots"
+
     class _Ctx:
         def get_config(self, key, default=None):
             if key == "watch_dirs":
-                return ["/root/demo-screens/Screenshots"]
+                return [folder]
             return default
 
     peripheral._CTX = _Ctx()
     peripheral._CACHED = None
 
-    recall = tools.screen_recall({"query": "card error", "since": "2026-11-02", "limit": 2})
-    recall_lines = []
-    for line in recall.splitlines():
-        if not line.strip() or line.strip().startswith("thumb:"):
-            continue
-        if len(line) > 100:
-            line = line[:99] + "…"
-        recall_lines.append(line)
-    recall_lines = recall_lines[:7]
+    report = ingest.scan(Settings(watch_dirs=(Path(folder),), auto_scan_minutes=0), batch=40)
+    print(f"index: {report.line()}")
 
-    # The harness really is calling screen_recall while this renders, so logging
-    # that call is a true event rather than a decoration for the timeline.
-    # Earlier renders leave their own copies behind; keep exactly one.
-    db.connect().execute("DELETE FROM events WHERE name = 'screen_recall'")
-    db.record_event("tool", "screen_recall", 'query="card error"')
+    transcript_path = ROOT / "docs" / "demo-transcript.json"
+    if not transcript_path.is_file():
+        raise SystemExit(
+            f"missing {transcript_path} — run scripts/demo_session.py first so the video "
+            "renders a real session instead of invented text"
+        )
+    import json
 
-    shots = db.recent(12, since=tools.parse_when("2d") or 0)
-    events = db.events_between(tools.parse_when("2d") or 0, time.time(), limit=12)
+    transcript = json.loads(transcript_path.read_text())
+    turn = transcript["turns"][0]
+    first = turn["steps"][0]
+
+    def call_label(step: dict) -> str:
+        args = ", ".join(f'{key}={json.dumps(value)}' for key, value in step["args"].items())
+        label = f"{step['tool']}({args})"
+        return label if len(label) <= 78 else label[:77] + "…"
+
+    ask = {
+        "question": turn["question"],
+        "call": call_label(first),
+        "output": [
+            (line[:99] + "…" if len(line) > 100 else line)
+            for line in first["result_preview"].splitlines()
+            if line.strip() and not line.strip().startswith("thumb:")
+        ][:6],
+        "answer": paragraphs(turn["answer"]),
+        "note": f"{len(turn['steps'])} tool calls · {turn['elapsed_s']:.0f} s · "
+        f"{transcript['model']} · captured {transcript['captured_at']}",
+    }
+
+    # The render itself calls screen_recall below, so this event is true rather
+    # than decorative; earlier renders leave their own copies behind — keep one.
+    db.connect().execute("DELETE FROM events WHERE name IN ('screen_recall', 'screen_timeline')")
+    db.record_event("tool", "screen_recall", call_label(first))
+
+    shots = db.recent(12, since=tools.parse_when("7d") or 0)
+    events = db.events_between(tools.parse_when("7d") or 0, time.time(), limit=12)
     timeline = render.timeline(shots, events, title="").splitlines()
     timeline_lines = [line for line in timeline if line.strip()][:15]
-    return recall_lines, timeline_lines
+
+    tests = sum(
+        len([line for line in path.read_text().splitlines() if line.strip().startswith("def test_")])
+        for path in (ROOT / "tests").glob("test_*.py")
+    )
+    # The scan timing comes from the run that actually indexed the screens (recorded
+    # in the transcript), not from this warm re-open of the same index.
+    import re
+
+    measured = re.search(r"(\d+) added in ([\d.]+)s", transcript["index"])
+    if measured:
+        indexed, seconds = int(measured.group(1)), float(measured.group(2))
+    else:  # the index was already warm when the session ran
+        indexed, seconds = report.scanned, report.seconds
+    stats = [
+        (str(tests), "tests: real PNGs → Tesseract → FTS5"),
+        (f"{seconds:.1f} s", f"{indexed} screens at 1440×900 indexed"),
+        (f"{seconds / max(1, indexed):.2f} s", "per screen, 2 vCPU ARM, no GPU"),
+        ("safe", "hermes plugins validate — security scan"),
+    ]
+    return {"ask": ask, "timeline": timeline_lines, "stats": stats}
+
+
+def paragraphs(markdown: str, *, limit: int = 4) -> list[str]:
+    """Turn the model's markdown answer into the plain paragraphs the frame draws."""
+    import re
+
+    cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", markdown or "")
+    cleaned = re.sub(r"`(.+?)`", r"\1", cleaned)
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", cleaned) if block.strip()]
+    out: list[str] = []
+    for block in blocks:
+        text = " ".join(part.strip().lstrip(">").strip() for part in block.splitlines())
+        text = " ".join(text.split())
+        if text.startswith("—") or len(text) < 8:
+            continue
+        out.append(text)
+        if len(out) >= limit:
+            break
+    return out or ["(the captured answer was empty)"]
 
 
 def main() -> int:
@@ -316,26 +386,24 @@ def main() -> int:
         shutil.rmtree(BUILD)
     FRAMES.mkdir(parents=True)
 
-    recall_lines, timeline_lines = real_outputs()
+    data = real_outputs()
+    ask, timeline_lines, stats = data["ask"], data["timeline"], data["stats"]
     video = Video()
     scene_title(video)
     scene_problem(video)
     scene_folder(video)
     scene_ask(
         video,
-        question="what was that card error I saw on Monday?",
-        call='screen_recall(query="card error", since="2026-11-02")',
-        output=recall_lines,
-        answer=[
-            "That Monday screen was Stripe's error-code reference, open at 11:05.",
-            'It lists `expired_card` — "The card has expired. Check the expiration date or use a different card."',
-            "Caveat: the docs page, not a live charge failure. Want me to widen the search?",
-        ],
-        label="hermes · terminal",
+        question=ask["question"],
+        call=ask["call"],
+        output=ask["output"],
+        answer=ask["answer"],
+        note=ask["note"],
+        label="hermes · captured session",
     )
     scene_timeline(video, timeline_lines)
     scene_privacy(video)
-    scene_proof(video)
+    scene_proof(video, stats)
     scene_end(video)
 
     concat = BUILD / "concat.txt"

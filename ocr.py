@@ -35,6 +35,8 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bAIza[0-9A-Za-z\-_]{30,}\b"), "[google key]"),
     (re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b"), "[jwt]"),
     (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._\-+/=]{16,}"), r"\1 [redacted]"),
+    # Credentials embedded in a connection URL: postgres://user:pass@host/db.
+    (re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://[^/\s:@]+):([^@\s/]{1,})@"), r"\1:[redacted]@"),
     (re.compile(r"(?i)(\"?(password|passwd|secret|token|api[_-]?key)\"?\s*[:=]\s*\"?)[^\s\",;]{6,}"), r"\1[redacted]"),
     (re.compile(r"\b(?:\d[ -]?){13,19}\b"), "[card]"),
     (re.compile(r"\b[0-9a-fA-F]{32,}\b"), "[hex]"),

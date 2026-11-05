@@ -1,7 +1,7 @@
 ---
 name: peripheral
 description: "Search what the user has seen on screen (screenshots, OCR, timeline)."
-version: 1.0.0
+version: 1.0.1
 author: kyssta
 license: MIT
 metadata:

@@ -2,7 +2,7 @@
 
 Every key here mirrors a ``config_schema`` entry in ``plugin.yaml`` one-for-one:
 the Desktop Settings form, ``hermes config set`` and this module must agree on a
-single source of truth, and ``tests/test_settings.py`` asserts the key sets are
+single source of truth, and ``tests/test_manifest.py`` asserts the key sets are
 identical. Values are coerced defensively — a typo in ``config.yaml`` must never
 be able to stop the plugin from answering.
 """

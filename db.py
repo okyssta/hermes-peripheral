@@ -17,6 +17,7 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 PLUGIN_ID = "peripheral"
@@ -214,13 +215,23 @@ _EVENT_WRITES = 0
 
 def record_event(kind: str, name: str, detail: str = "", session_id: str = "", at: float | None = None) -> None:
     """Append one agent event. The log is capped so a long-lived install cannot
-    grow it without bound: every 500 writes, the oldest rows beyond 20k go."""
+    grow it without bound: every 500 writes, the oldest rows beyond 20k go.
+
+    ``detail`` usually comes from a tool's arguments (a shell command, a URL, a
+    query), so it is redacted here — the storage boundary — rather than trusting
+    every caller to remember. The README and the catalog disclosure both promise
+    that no secret is written to disk; this is what makes that true for events
+    as well as for OCR text.
+    """
     global _EVENT_WRITES
+    from .ocr import redact
+
+    safe_detail = redact(str(detail or ""))[:400]
     conn = connect()
     with _LOCK:
         conn.execute(
             "INSERT INTO events (at, kind, name, detail, session_id) VALUES (?, ?, ?, ?, ?)",
-            (at or time.time(), kind, name[:120], detail[:400], session_id[:120]),
+            (at or time.time(), kind, name[:120], safe_detail, session_id[:120]),
         )
         _EVENT_WRITES += 1
         if _EVENT_WRITES % 500 == 0:
@@ -230,20 +241,68 @@ def record_event(kind: str, name: str, detail: str = "", session_id: str = "", a
         conn.commit()
 
 
+def _unlink(path: str | None) -> int:
+    """Remove one file the index owns. Never touches the user's own images."""
+    if not path:
+        return 0
+    try:
+        Path(path).unlink(missing_ok=True)
+        return 1
+    except OSError:  # pragma: no cover - a locked/removed file must not fail a forget
+        return 0
+
+
+def _sweep_thumbs() -> int:
+    """Remove every thumbnail under plugin-data/peripheral/thumbs (orphans too)."""
+    try:
+        from plugins.plugin_storage import plugin_data_dir
+
+        root = plugin_data_dir(PLUGIN_ID) / "thumbs"
+    except Exception:  # pragma: no cover - storage API unavailable (tests stub it)
+        return 0
+    if not root.is_dir():
+        return 0
+    removed = 0
+    for path in root.rglob("*"):
+        if path.is_file() and _unlink(str(path)):
+            removed += 1
+    for path in sorted(root.rglob("*"), reverse=True):
+        if path.is_dir():
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+    return removed
+
+
 def forget(shot_id: int | None = None) -> int:
-    """Delete one entry, or the whole index. Thumbnails are removed by the caller."""
+    """Delete one entry, or the whole index — rows *and* the thumbnails this
+    plugin wrote for them. The user's original screenshots are never touched.
+
+    A thumbnail is a full copy of the screen at 360 px: leaving it behind after
+    "forget" would make the promise false, so the files go with the rows.
+    """
     conn = connect()
     with _LOCK:
         if shot_id is None:
+            thumbs = thumbnails()
             cursor = conn.execute("DELETE FROM shots")
             conn.execute("DELETE FROM files")
         else:
+            rows = _rows("SELECT thumb_path FROM shots WHERE id = ?", (shot_id,))
+            thumbs = [row["thumb_path"] for row in rows if row["thumb_path"]]
             cursor = conn.execute("DELETE FROM shots WHERE id = ?", (shot_id,))
             # Drop the bookkeeping too: "forget" must survive the next scan, and a
             # later /peripheral rescan should be able to bring the file back.
             conn.execute("DELETE FROM files WHERE shot_id = ?", (shot_id,))
         conn.commit()
-        return int(cursor.rowcount or 0)
+    # Outside the lock: unlinking is I/O, and a failure here must not roll back
+    # the row deletion the user asked for.
+    for thumb in thumbs:
+        _unlink(thumb)
+    if shot_id is None:
+        _sweep_thumbs()
+    return int(cursor.rowcount or 0)
 
 
 def prune(retention_days: int, now: float | None = None) -> int:

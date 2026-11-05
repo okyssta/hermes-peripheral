@@ -7,19 +7,24 @@ Your agent never saw it at all.
 the machine is read locally with OCR, indexed with the time it was captured, and
 answered back by four tools the agent calls on its own:
 
-> **You:** what was that card error I saw on Monday?
+> **You:** what was that card error I saw on Monday morning?
 >
-> **Hermes:** *(calls `screen_recall("card error", since="2026-11-02")`)*
-> The closest thing on Monday was a Stripe error-code page, open at 11:05 AM.
-> It lists `expired_card` — "The card has expired. Check the expiration date or
-> use a different card." One caveat: this was the reference docs, not a live
-> error in your app — want me to widen the search?
+> **Hermes:** *(calls `screen_recall(query="card error", since="7d")`, then
+> `screen_show(8)`)* Monday's card error was on the Stripe docs error-codes page
+> (screenshot at 11:05, Nov 2) — the code listed there was **`expired card`**:
+> "The card has expired. Check the expiration date or use a different card."
+> The other Monday screens were a Slack thread and a pytest run — no payment
+> errors in either.
+
+That exchange is not a mock-up: it is [a captured session](docs/demo-transcript.txt)
+with `deepseek-v4.1-flash`, five tool calls, and the tool output the model actually
+saw. `scripts/demo_session.py` re-runs it against a real index.
 
 Nothing leaves the machine. No account, no API key, no capture daemon, no cloud
 index. One SQLite file and a folder of thumbnails, both inside the profile's own
 plugin-data directory, both deletable with a command.
 
-**[74-second demo (silent)](docs/demo.mp4)** · **[verification dossier (PDF)](docs/peripheral-dossier.pdf)**
+**[74-second demo (silent)](docs/demo.mp4)** · **[captured transcript](docs/demo-transcript.txt)** · **[verification dossier (PDF)](docs/peripheral-dossier.pdf)**
 
 ---
 
@@ -183,11 +188,13 @@ This plugin reads your screenshots, so it is built to be boring about them:
   tool already wrote. (A capture mode is deliberately not shipped: the failure
   mode of a botched screen recorder is silent and personal.)
 - **Redaction on by default**: API keys (`sk-`, `ghp_`, `AKIA`, `AIza`, Slack
-  tokens), JWTs, bearer/basic headers, `password:`/`token:` JSON values, private
-  keys, card numbers and 32+ char hex strings are replaced before anything is
-  stored.
-- **You can forget**: `/peripheral forget <id>` or `forget all` removes rows (and
-  their thumbnails' references) — the image files are never touched.
+  tokens), JWTs, bearer/basic headers, `password:`/`token:` JSON values,
+  credentials inside connection URLs (`postgres://user:pass@…`), private keys,
+  card numbers and 32+ char hex strings are replaced before anything is stored —
+  in the OCR text *and* in the agent-event log, which stores tool arguments.
+- **You can forget**: `/peripheral forget <id>` or `forget all` deletes the row
+  *and* the thumbnail this plugin wrote for it (a 360 px copy of your screen is
+  still a copy). The screenshots themselves are never touched — those are yours.
 - **You can pause**: `/peripheral pause` stops indexing immediately.
 - **Retention**: `retention_days` prunes old entries on every scan.
 - **Profile-scoped**: the index lives in
@@ -200,15 +207,16 @@ This plugin reads your screenshots, so it is built to be boring about them:
 
 ```bash
 uv venv .venv && uv pip install --python .venv/bin/python pytest pillow pyyaml
-.venv/bin/python -m pytest tests -q       # 22 passed
+.venv/bin/python -m pytest tests -q       # 27 passed
 hermes plugins validate .                 # Validation passed (security scan: safe)
 ```
 
 The tests build real PNGs with real text and run the real pipeline: indexing,
 ranked retrieval, incremental rescans, duplicate and near-duplicate rejection,
-retention, forget, redaction, FTS operator injection, time-expression parsing, and
-a manifest contract test that keeps `plugin.yaml` and the code naming the same
-things.
+retention, forget (rows **and** thumbnails), redaction of OCR text and of agent
+event details, FTS operator injection, time-expression parsing, `before`/`since`
+bounds, and a manifest contract test that keeps `plugin.yaml` and the code naming
+the same things.
 
 ---
 
