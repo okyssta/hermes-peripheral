@@ -1,0 +1,136 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "DejaVu Sans", -apple-system, Segoe UI, sans-serif; color:#15181d; font-size:10.2pt; line-height:1.45; }
+  h1 { font-size:20pt; margin:0 0 2mm; letter-spacing:-0.3px; }
+  h2 { font-size:12pt; margin:7mm 0 2mm; padding-bottom:1.2mm; border-bottom:1.2px solid #15181d; }
+  h3 { font-size:10.5pt; margin:4mm 0 1mm; }
+  .sub { color:#555c66; font-size:10pt; margin:0 0 5mm; }
+  code, .mono { font-family:"DejaVu Sans Mono", monospace; font-size:8.8pt; }
+  table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; }
+  th { text-align:left; font-size:8.8pt; text-transform:uppercase; letter-spacing:.4px; color:#555c66; border-bottom:1px solid #c9ced6; padding:1.4mm 2mm; }
+  td { vertical-align:top; padding:1.6mm 2mm; border-bottom:1px solid #e6e9ee; font-size:9.4pt; }
+  .tag { display:inline-block; font-family:"DejaVu Sans Mono",monospace; font-size:7.6pt; padding:0.3mm 1.4mm; border-radius:2px; border:1px solid; }
+  .dem { color:#0b6b3a; border-color:#0b6b3a; }
+  .neg { color:#9b1c1c; border-color:#9b1c1c; }
+  .hyp { color:#7a4d00; border-color:#7a4d00; }
+  .pln { color:#2b4a8b; border-color:#2b4a8b; }
+  pre { background:#f4f6f8; border-left:2.5px solid #15181d; padding:2.5mm 3mm; font-family:"DejaVu Sans Mono",monospace; font-size:8.4pt; white-space:pre-wrap; margin:2mm 0 3mm; }
+  ul { margin:1mm 0 2mm 4mm; padding:0; }
+  li { margin:0.8mm 0; }
+  .row { display:flex; gap:6mm; }
+  .row > div { flex:1; }
+  a { color:#15181d; }
+  .foot { margin-top:6mm; border-top:1px solid #c9ced6; padding-top:2mm; color:#555c66; font-size:8.6pt; }
+</style></head><body>
+
+<h1>Peripheral — a memory of what you've seen on screen</h1>
+<p class="sub">Hermes Agent Plugin Hackathon entry · dossier for verification · 5 Nov 2026 · <span class="mono">okyssta/hermes-peripheral</span> v1.0.0</p>
+
+<h2>1. The entry in one paragraph</h2>
+<p>Hermes can read a file you hand it and can look at the screen <i>now</i>. It cannot answer for a screen that is
+already gone — <i>“that error I got yesterday”</i>, <i>“the price on that page”</i>, <i>“what was on screen when it
+broke”</i>. Peripheral indexes the screenshots the OS already writes, reads them locally with Tesseract, and gives
+the agent four tools: <span class="mono">screen_recall</span>, <span class="mono">screen_timeline</span>,
+<span class="mono">screen_show</span>, <span class="mono">screen_index</span> — plus a <span class="mono">/peripheral</span>
+command and a bundled skill. The timeline puts the user's screens and the agent's own tool calls on one clock.
+Local only: no network calls, no capture daemon, secrets redacted at ingest.</p>
+
+<h2>2. Claim ledger</h2>
+<table>
+  <tr><th style="width:22mm">Status</th><th>Claim</th><th style="width:62mm">Evidence</th></tr>
+  <tr><td><span class="tag dem">demonstrated</span></td>
+      <td>The pipeline indexes real screenshots and finds the screen that answers a natural question.</td>
+      <td>10 real 1440×900 pages (5 captured live from Stripe/GitHub/AWS/HN/Python docs, 5 rendered local apps) → 10.6 s, 12,616 chars stored; query <span class="mono">"card error"</span> returns screen #8 and the line <i>“The card has expired. Check the expiration date or use a different card.”</i></td></tr>
+  <tr><td><span class="tag dem">demonstrated</span></td>
+      <td>The model reaches for the tools unprompted and quotes them correctly.</td>
+      <td>Real tool-call loop against the provider: the model chose <span class="mono">screen_recall(query,since)</span>, then <span class="mono">screen_show</span>, and answered with <span class="mono">expired_card</span> plus an honest caveat that it was a docs page, not a live failure. Transcript: <span class="mono">scripts/demo_session.py</span></td></tr>
+  <tr><td><span class="tag dem">demonstrated</span></td>
+      <td>Admissible by the catalog's own gate.</td>
+      <td><span class="mono">hermes plugins validate</span> at the pinned SHA <span class="mono">a5e91fb</span>: manifest, config schema, capability probe, declared tools/hooks match, security scan <b>safe</b>, no core override. 22/22 tests.</td></tr>
+  <tr><td><span class="tag dem">demonstrated</span></td>
+      <td>No catalog entry, no repo in the competition wave, and no community-directory entry does screen history.</td>
+      <td>978 catalog entries parsed; nearest are <span class="mono">mediarag</span>, <span class="mono">document-reader</span>, <span class="mono">source-tray</span>, <span class="mono">modlens</span>, <span class="mono">hermes-time-machine</span> — each differing in mechanism (§4). 480-repo wave (since 1 Sep) grepped for screen/screenshot/recall/timeline.</td></tr>
+  <tr><td><span class="tag neg">negative</span></td>
+      <td>The in-gateway chat demo could not be recorded on this host.</td>
+      <td><span class="mono">hermes chat -q</span> fails with <span class="mono">invalid_params</span> for <i>new</i> sessions regardless of this plugin — reproduced with the plugin disabled, on a slash command, and on a second profile. The four tool schemas were verified separately against the provider (HTTP 200, correct tool selection), and the plugin loads/registers under the real loader.</td></tr>
+  <tr><td><span class="tag hyp">hypothesis</span></td>
+      <td>“Useful for ~90% of users.”</td>
+      <td>Every screenshot-taker has this question; screenshots are a default OS behaviour (macOS Desktop, Windows Snipping Tool, Linux folders) and the plugin also indexes images the user sends the agent. Users who never screenshot get nothing until they do — that is the honest limit of the claim.</td></tr>
+  <tr><td><span class="tag pln">planned</span></td>
+      <td>Submission steps 2–3.</td>
+      <td>X post tagging <span class="mono">@NousResearch</span> and the Typeform — both need your account; copy is ready on request. Catalog PR is open (step 1 done).</td></tr>
+</table>
+
+<h2>3. What was built</h2>
+<div class="row">
+<div>
+<h3>Surfaces</h3>
+<ul>
+  <li>4 tools (toolset <span class="mono">peripheral</span>), 1 slash command, 1 observer hook (<span class="mono">post_tool_call</span>), 1 skill</li>
+  <li>Settings in <span class="mono">plugin.yaml</span> render in Desktop → Settings → Plugins</li>
+  <li>State in <span class="mono">&lt;HERMES_HOME&gt;/plugin-data/peripheral/</span> via the documented storage API</li>
+</ul>
+<h3>Mechanics</h3>
+<ul>
+  <li>Incremental scan by mtime+size+SHA-256; near-duplicates dropped at Hamming ≤ 3 on a 64-bit dHash</li>
+  <li>Tesseract as one bounded subprocess (25 s cap, one thread); no OCR ⇒ visual index instead of failure</li>
+  <li>SQLite FTS5 (porter) + BM25, re-ranked by recency and text richness; query sanitised into quoted prefix terms</li>
+  <li>Evidence snippet re-chosen from the stored text — the line with the most query terms, windowed around them</li>
+  <li>Redaction: <span class="mono">sk-</span>/<span class="mono">ghp_</span>/<span class="mono">AKIA</span>/<span class="mono">AIza</span>/Slack, JWT, bearer/basic, <span class="mono">password:</span>, private keys, card numbers, 32+ hex</li>
+</ul>
+</div>
+<div>
+<h3>Measured on this machine (2 vCPU ARM, no GPU)</h3>
+<pre>10 screens (1440×900)  →  10.6 s   (1.06 s/screen)
+text stored            →  12,616 chars
+warm rescan            →  0 images re-read
+tests                  →  22 passed
+validate               →  security scan: safe
+video                  →  74 s, 0.7 MB, silent</pre>
+<h3>Privacy posture</h3>
+<ul>
+  <li>Zero network calls; no telemetry, no sync, no model call to index</li>
+  <li>Never captures the screen — reads files the OS already wrote</li>
+  <li><span class="mono">/peripheral forget &lt;id&gt;|all</span>, <span class="mono">pause</span>, <span class="mono">retention_days</span></li>
+  <li>Never modifies or deletes the user's images</li>
+</ul>
+</div>
+</div>
+
+<h2>4. Prior-art audit (the part that decides “unique”)</h2>
+<table>
+  <tr><th style="width:44mm">Nearest thing</th><th>What it actually does</th><th style="width:58mm">Why this is not that</th></tr>
+  <tr><td class="mono">mediarag</td><td>Hybrid semantic search over a document/media corpus you point it at (285 MB embeddings, MCP).</td><td>No screen capture, no time semantics, no timeline; a library indexer.</td></tr>
+  <tr><td class="mono">document-reader</td><td>OCR of documents into a Desktop viewer, per profile.</td><td>Reads what you give it; no history, no agent tools, no search by time.</td></tr>
+  <tr><td class="mono">modlens</td>, <span class="mono">hermes-vision-inline</span></td><td>Vision bridges that describe an image to a text-only model.</td><td>Per-image perception; nothing persists, nothing is searchable.</td></tr>
+  <tr><td class="mono">source-tray</td><td>Records the URLs the <i>agent</i> opened, in a Desktop pane.</td><td>Captures the agent's browsing, not the user's screen, and stores no content.</td></tr>
+  <tr><td class="mono">hermes-time-machine, session-diff</td><td>Timeline/scrubber over <i>sessions</i>.</td><td>Conversation history, not the screen.</td></tr>
+  <tr><td>Windows Recall, screenpipe (22k★)</td><td>OS-level screenshot search / open computer history.</td><td>Not agent-native: no tools, no time-bounded recall, no join with agent actions, not installable in Hermes. They prove the demand.</td></tr>
+</table>
+<p><b>The delta is one mechanism:</b> a persistent, time-indexed percept of the user's screen that the agent can
+query, joined to a log of what the agent itself did. Scope of the claim: “no catalog entry and no repo in the wave
+does this”, not “no software anywhere does this”.</p>
+
+<h2>5. Deliverables</h2>
+<table>
+  <tr><th style="width:34mm">Artifact</th><th>Where</th></tr>
+  <tr><td>Plugin source (MIT)</td><td class="mono">https://github.com/okyssta/hermes-peripheral</td></tr>
+  <tr><td>Catalog PR</td><td class="mono">https://github.com/NousResearch/hermes-agent/pull/149463</td></tr>
+  <tr><td>Demo video (74 s, silent)</td><td class="mono">out/peripheral-demo.mp4</td> — also sent to Discord</td></tr>
+  <tr><td>Tests / harness</td><td><span class="mono">tests/</span> (22), <span class="mono">scripts/demo_session.py</span>, <span class="mono">scripts/make_demo_video.py</span></td></tr>
+  <tr><td>Installed locally</td><td><span class="mono">main</span> profile, watch dir <span class="mono">/root/demo-screens/Screenshots</span> (10 screens indexed)</td></tr>
+</table>
+
+<h2>6. What I would do next, in order</h2>
+<ul>
+  <li>Post the X demo and file the Typeform (needs your account) — the only two submission steps left.</li>
+  <li>Add a capture adapter per OS behind an explicit opt-in, if the catalog review asks for one; deliberately withheld for v1.</li>
+  <li>Semantic fallback for paraphrased queries (FTS only today): embed the OCR text when a local model is available, keeping text search as the deterministic base.</li>
+  <li>Re-record the demo through <span class="mono">hermes chat</span> once this host's new-session provider error is fixed.</li>
+</ul>
+
+<p class="foot">Prepared by Hermes (kanban task t_a960d4f7) for Kyssta · every number above came from a command run on this host ·
+claims labelled demonstrated / hypothesis / negative / planned, no unlabelled assurances.</p>
+</body></html>
