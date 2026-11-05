@@ -38,12 +38,12 @@
 <div class="kicker">Hermes plugin hackathon · verification dossier</div>
 <h1>Peripheral</h1>
 <div class="sub">A memory of what was on your screen — hands-on verification, claim by claim.</div>
-<p class="lede">Version 2.1.0 · catalog pins the commit tagged <span class="mono">v2.1.0</span>
-(<span class="mono">scripts/check_release.py</span> proves <span class="mono">git rev-parse v2.1.0</span>
+<p class="lede">Version 2.1.1 · catalog pins the commit tagged <span class="mono">v2.1.1</span>
+(<span class="mono">scripts/check_release.py</span> proves <span class="mono">git rev-parse v2.1.1</span>
 equals the <span class="mono">sha</span> in <span class="mono">catalog-entry.yaml</span>) ·
-docs built at <span class="mono">d41c3177a700</span> (master) — the tree immediately
+docs built at <span class="mono">64c37ff0af9e</span> (master) — the tree immediately
 before this file was committed, since a PDF cannot contain the SHA of the commit that
-adds it — the tag <span class="mono">v2.1.0</span> names the commit that does · 2026-11-05 19:14 UTC ·
+adds it — the tag <span class="mono">v2.1.1</span> names the commit that does · 2026-11-05 19:35 UTC ·
 MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
 
 <blockquote>
@@ -92,6 +92,12 @@ MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
       <td>the demo's first screen was captured, then the browser was closed and replaced twice; <code>screen_recall("card declined")</code> still returned it, and all three screens matched a single question</td></tr>
   <tr><td>Forget removes the pixels, not just the row</td><td><span class="tag ok">demonstrated</span></td>
       <td><code>test_forget_deletes_a_captured_frame_and_spares_a_user_screenshot</code>, <code>test_forget_all_clears_captured_frames_and_keeps_user_files</code>; live probe in the transcript of the forget run</td></tr>
+  <tr><td>A locked index cannot stall a turn</td><td><span class="tag ok">demonstrated</span></td>
+      <td>measured with an exclusive lock held by a second connection: five <code>post_tool_call</code> events took
+      <strong>25.0 s</strong> before 2.1.1 (Hermes' 5 s busy timeout, inherited), <strong>7.5 s</strong> with only that
+      timeout capped, and <strong>3 ms</strong> once the event log stopped waiting at all — the row is dropped and the tool call
+      proceeds (<code>tests/test_locked_db.py</code>). Reads and the timeline kept answering throughout, because WAL lets
+      readers through</td></tr>
   <tr><td>Works without Tesseract (visual index)</td><td><span class="tag ok">demonstrated</span></td>
       <td><code>test_a_machine_without_ocr_still_builds_a_visual_index</code> — image stored, timeline lists it, marked <code>no text</code></td></tr>
   <tr><td>No network calls, no telemetry</td><td><span class="tag ok">demonstrated</span></td>
@@ -151,7 +157,7 @@ Then deploy-bot reported `checkout-api@a91f3c2` going to staging, followed by: *
 
 <h2>4. Verification performed</h2>
 <div class="grid">
-  <div class="card avoid"><div class="kicker">tests</div><p><strong>60 passed</strong> in 10.3 s — real PNGs, real Tesseract, real SQLite, no mocks except the capture binary seam.</p></div>
+  <div class="card avoid"><div class="kicker">tests</div><p><strong>64 passed</strong> in 10.3 s — real PNGs, real Tesseract, real SQLite, no mocks except the capture binary seam.</p></div>
   <div class="card avoid"><div class="kicker">manifest</div><p><code>hermes plugins validate .</code> → <strong>Validation passed</strong>; security scan <strong>safe</strong>; no core override; declared tools and hooks match registrations.</p></div>
   <div class="card avoid"><div class="kicker">demo</div><p><strong>80.0 s</strong>, silent, 1600x1000 h264, 0.9 MB — under the 90 s cap.</p></div>
   <div class="card avoid"><div class="kicker">locality</div><p>one SQLite file + WebP files under <code>plugin-data/peripheral/</code>; no socket, no HTTP, no key.</p></div>
@@ -184,7 +190,7 @@ Then deploy-bot reported `checkout-api@a91f3c2` going to staging, followed by: *
 <h2>6. Reproduction</h2>
 <pre class="mono small">git clone https://github.com/okyssta/hermes-peripheral &amp;&amp; cd hermes-peripheral
 uv venv /tmp/peripheral-venv &amp;&amp; uv pip install --python /tmp/peripheral-venv/bin/python -r requirements-dev.txt
-/tmp/peripheral-venv/bin/python -m pytest tests -q   # 60 passed
+/tmp/peripheral-venv/bin/python -m pytest tests -q   # 64 passed
 hermes plugins validate .                    # Validation passed
 
 # rebuild the demo evidence from scratch (needs a display + a browser)
@@ -221,7 +227,7 @@ python3 scripts/make_dossier.py</pre>
       The transcript is a real provider session against the real handlers, not a rendered script.</li>
 </ul>
 
-<h2>8. Change log: 1.0.1 → 2.1.0</h2>
+<h2>8. Change log: 1.0.1 → 2.1.1</h2>
 <table>
   <tr><th>Area</th><th>Change</th></tr>
   <tr><td>Capture</td><td>new <code>capture.py</code>: X11 (ffmpeg), Wayland (grim), macOS (screencapture), Windows (PowerShell), ImageMagick/scrot/maim fallbacks; argv-only, timeouts, no shell</td></tr>
@@ -230,16 +236,20 @@ python3 scripts/make_dossier.py</pre>
   <tr><td>Privacy</td><td>forget and retention now delete captured frames as well as thumbnails; captured frames live only under plugin-data</td></tr>
   <tr><td>Search</td><td>prefix fallback for OCR noise, with an honest-miss test</td></tr>
   <tr><td>Surface</td><td><code>/peripheral capture</code>, <code>/peripheral watch on|off</code>, capture readiness in status; skill rewritten</td></tr>
-  <tr><td>Tests</td><td>27 → 60</td></tr>
+  <tr><td>Tests</td><td>27 → 64</td></tr>
   <tr><td>Vision (2.1.0)</td><td>the gate now reads the documented config keys Hermes itself reads — <code>model.supports_vision</code>,
       <code>agent.image_input_mode</code>, and a per-model <code>providers.&lt;p&gt;.models.&lt;m&gt;.supports_vision</code> override —
       instead of only the top-level flag, and a quoted string is ignored rather than read as a boolean. It still imports no Hermes
       internals (rule 9); a catalogue-only vision model falls back to text and the model asks with <code>image: true</code></td></tr>
   <tr><td>Dev deps (2.1.0)</td><td><code>requirements-dev.txt</code> declares the test-only packages (pytest, Pillow, PyYAML); a fresh clone can
       reproduce the suite without being told which module the harness imports</td></tr>
+  <tr><td>Locked index (2.1.1)</td><td><code>db.record_event</code> — the write that <code>post_tool_call</code> makes after every tool
+      call — no longer queues behind a lock another process holds: it attempts the insert with no busy wait, drops the row if the
+      index is busy, and restores the 1.5 s cap for everything else. Measured under an exclusive lock: 25.0 s of stall across five
+      tool events before, 3 ms after</td></tr>
   <tr><td>Docs</td><td>2.0.2: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice), and <code>scripts/check_release.py</code> now proves tag == pin and that the shipped PDF is the recorded build; the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 
-<footer>Peripheral 2.1.0 · release <span class="mono">v2.1.0</span> · dossier generated from the repository at
-<span class="mono">d41c3177a700f947b4e095856d8fc1342697dd2e</span> · every figure in this document is read from the build, not typed.</footer>
+<footer>Peripheral 2.1.1 · release <span class="mono">v2.1.1</span> · dossier generated from the repository at
+<span class="mono">64c37ff0af9ea0cef9e05bd132af5622d1e541cc</span> · every figure in this document is read from the build, not typed.</footer>
 </body></html>
