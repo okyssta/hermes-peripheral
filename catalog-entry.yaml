@@ -1,6 +1,11 @@
+# The catalog entry that goes into NousResearch/hermes-agent as
+# plugin-catalog/peripheral.yaml. `sha` is the release commit — the commit tagged
+# v2.0.1 — and this file cannot pin the commit that contains it, so the copy inside
+# the tree always names the release just before it. scripts/check_release.py proves
+# the tag and this pin agree.
 name: peripheral
 repo: https://github.com/okyssta/hermes-peripheral
-sha: 63e4c7200b10036750ae63e2b393f713e243dfc4
+sha: ac8cc55c79a47f101eb8ea5e1c86eb792216db29
 description: >-
   A memory of what the user has seen on screen. Peripheral captures the display
   itself on request, optionally on change in the background, and indexes the
