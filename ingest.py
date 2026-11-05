@@ -389,10 +389,17 @@ class AutoScanner:
         self._thread: threading.Thread | None = None
 
     def start(self, interval_minutes: int) -> None:
-        if interval_minutes <= 0 or self._thread is not None:
+        if interval_minutes <= 0 or (self._thread is not None and self._thread.is_alive()):
             return
+        # A stopped scanner must be restartable: `/peripheral resume` starts it
+        # again in the same process, and a spent Event would make it exit at once.
+        self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, args=(interval_minutes,), name="peripheral-scan", daemon=True)
         self._thread.start()
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
 
     def _loop(self, interval_minutes: int) -> None:
         # First pass shortly after boot: a user who restarts Hermes expects
@@ -435,8 +442,11 @@ class ScreenWatcher:
         self._kept: list[float] = []
 
     def start(self, interval_seconds: int, min_gap_seconds: int = 15, max_per_hour: int = 120) -> None:
-        if interval_seconds <= 0 or self._thread is not None:
+        if interval_seconds <= 0 or (self._thread is not None and self._thread.is_alive()):
             return
+        # `/peripheral watch on` may be called more than once and after an off, so
+        # the stop flag is rebuilt here rather than inherited from the last run.
+        self._stop = threading.Event()
         self._thread = threading.Thread(
             target=self._loop,
             args=(max(5, interval_seconds), max(0, min_gap_seconds), max(1, max_per_hour)),
@@ -444,6 +454,10 @@ class ScreenWatcher:
             daemon=True,
         )
         self._thread.start()
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
 
     def _allowed(self, max_per_hour: int) -> bool:
         now = time.time()

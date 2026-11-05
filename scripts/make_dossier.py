@@ -357,6 +357,17 @@ python3 scripts/make_dossier.py</pre>
       call — no longer queues behind a lock another process holds: it attempts the insert with no busy wait, drops the row if the
       index is busy, and restores the 1.5 s cap for everything else. Measured under an exclusive lock: 25.0 s of stall across five
       tool events before, 3 ms after</td></tr>
+  <tr><td>Polish (2.1.2)</td><td>six defects found by walking the surfaces as a user, each with a test:
+      <code>/peripheral pause</code> and <code>/peripheral watch on</code> now take effect on the next call (the two-second
+      settings memo is invalidated, and the command starts or stops the capture thread instead of waiting for a reload);
+      a query where no screen held every word returns the screens that share some, labelled
+      <em>“No screen held every word of …”</em> with <code>· matched:</code> per row; <code>tomorrow</code>,
+      <code>this week</code>, weekday names and <code>an hour ago</code> parse, and a bound that still cannot be parsed is
+      reported instead of silently dropped; a near-miss subcommand gets <em>“did you mean /peripheral scan?”</em> only when
+      the search itself found nothing; and an empty install counts the images already in its folders so the first command
+      also says what to do next</td></tr>
+  <tr><td>Tests (2.1.2)</td><td>64 → 77: a fake host fixture registers the plugin the way the gateway does, so the command
+      surface, the pause/watch switches and the first-run text are covered by the same real pipeline</td></tr>
   <tr><td>Docs</td><td>2.0.2: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice), and <code>scripts/check_release.py</code> now proves tag == pin and that the shipped PDF is the recorded build; the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 

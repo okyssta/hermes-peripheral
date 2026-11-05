@@ -56,6 +56,19 @@ not take screenshots. 2.0 closes that gap and two more:
 | Opening a screen | text + path | **text + the image attached to the result** (on vision models) |
 | Forgetting | slash command | **`screen_forget` tool** the agent can call, rows *and* files |
 
+### What changed in 2.1.2 (the polish round)
+
+Everything below came from walking the surfaces as a user, not from the test suite:
+
+| Symptom | Cause | Now |
+|---|---|---|
+| `/peripheral pause` then asking the agent to look at the screen still captured | settings were memoised for 2 s, and the pause did not invalidate that | the change is dropped into the cache immediately |
+| `/peripheral watch on` said "on" and captured nothing until a restart | the capture thread was only started at load time | the command starts and stops the thread itself, and says so when it cannot |
+| "card error" found nothing although the screen said "The card has expired" | full-text search ANDs the words | the strict result still wins; a miss now returns the screens that share some words, labelled with which ones |
+| `since tomorrow` silently returned everything | unparseable time words were dropped | `tomorrow`, `this week`, weekdays and `an hour ago` parse, and a bound that is still not understood is reported instead of ignored |
+| `/peripheral scna` searched for the word "scna" | unknown subcommands fell through to search | a near-miss gets "did you mean /peripheral scan?" — but only when the search itself found nothing |
+| an empty install listed folders and nothing else | status described state, not the next step | it counts the images already sitting in those folders and says whether one scan is all it takes |
+
 ### The honest competitive audit
 
 The plugin catalog (978 entries at the time of writing), the 480-repo wave created
@@ -140,17 +153,23 @@ The agent reaches for the tools itself. You can also drive them:
 
 ```
 /peripheral                     what is indexed, where it looks, capture and OCR readiness
+/peripheral config              the settings in force (folders, languages, retention, capture)
 /peripheral capture [note]      remember what is on screen right now
 /peripheral watch on | off      background capture on change (off by default)
 /peripheral scan                index new screenshots now
 /peripheral stripe expired      search the screen history
-/peripheral stripe since yesterday
+/peripheral stripe since yesterday | after 3pm | before 2026-11-04
 /peripheral timeline yesterday  what was on screen, in order, with agent actions
 /peripheral open 8              one screen's full text
 /peripheral forget 8            remove one screen, its thumbnail and its captured frame
 /peripheral forget all
-/peripheral pause | resume
+/peripheral pause | resume      stop or restart indexing and capture
+/peripheral help                every command, with the time words it accepts
 ```
+
+On a fresh install `/peripheral` counts the images already sitting in your screenshot
+folders, so the first command you type is also the one that tells you whether a single
+scan is all you need.
 
 | Tool | Purpose |
 |---|---|

@@ -1,7 +1,7 @@
 ---
 name: peripheral
 description: "Remember and search what was on the user's screen — screenshots and live screen captures, locally OCR'd."
-version: 2.1.1
+version: 2.1.2
 author: kyssta
 license: MIT
 metadata:
@@ -45,6 +45,18 @@ is the only evidence.
 `screen_show(id)` returns the full OCR text **and the image itself** when the active
 model can see images. When the meaning is in the layout — a chart, a dialog, a state —
 look at the attached image rather than trusting the OCR.
+
+## When the search comes back partial
+
+`screen_recall` ANDs the words you pass. If no screen held all of them, the answer
+starts with *"No screen held every word of …"* and lists the screens that share some,
+each marked `· matched: <words>`. Treat that as a lead, not as the answer: say it is a
+partial match, then open the screen with `screen_show` before quoting anything.
+
+Time words `today`, `yesterday`, `tomorrow`, `this week`, weekdays, `2h`, `3 days`,
+`an hour ago` and `2026-11-04` all parse. If a bound you passed could not be parsed,
+`screen_recall` says so in the result — repeat that caveat instead of presenting an
+unfiltered answer as if it were windowed.
 
 ## Honesty rules
 

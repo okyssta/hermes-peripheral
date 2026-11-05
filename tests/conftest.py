@@ -88,3 +88,59 @@ def ocr_ready():
     if not ocr.available():
         pytest.skip("tesseract is not installed")
     return ocr
+
+
+class FakeHost:
+    """The plugin-host surface `register()` uses, without the gateway in the way."""
+
+    def __init__(self, config: dict | None = None) -> None:
+        self.config = dict(config or {})
+        self.tools: dict[str, object] = {}
+        self.commands: dict[str, object] = {}
+        self.hooks: dict[str, list] = {}
+        self.skills: list[str] = []
+
+    def register_tool(self, name, toolset=None, schema=None, handler=None, **kwargs):
+        self.tools[name] = handler
+
+    def register_command(self, name, handler, description="", **kwargs):
+        self.commands[name] = handler
+
+    def register_hook(self, name, fn, **kwargs):
+        self.hooks.setdefault(name, []).append(fn)
+
+    def register_skill(self, name, path, **kwargs):
+        self.skills.append(name)
+
+    def get_config(self, key, default=None, **kwargs):
+        return self.config.get(key, default)
+
+    def set_config(self, key, value):
+        self.config[key] = value
+
+
+@pytest.fixture()
+def plugin_host(hermes_home, tmp_path):
+    """A registered plugin with one empty screenshot folder, torn down afterwards.
+
+    Global module state (the ctx, the two background threads, the settings cache)
+    is reset on both sides so a test that starts the watcher cannot leak a thread
+    into the next one.
+    """
+    import peripheral
+    import peripheral.db as db
+
+    peripheral._CTX = None
+    peripheral.invalidate_settings()
+    screens = tmp_path / "screens"
+    screens.mkdir()
+    host = FakeHost({"watch_dirs": [str(screens)], "auto_scan_minutes": 0})
+    peripheral.register(host)
+    try:
+        yield host, screens
+    finally:
+        peripheral.set_enabled(False)
+        peripheral.set_background_capture(False)
+        peripheral._CTX = None
+        peripheral.invalidate_settings()
+        db.close()

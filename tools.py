@@ -169,6 +169,10 @@ def lazy_scan(settings: Settings, *, batch: int = 12) -> None:
 
 _RELATIVE = re.compile(r"^(?P<n>\d+)\s*(?P<unit>m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$", re.I)
 
+_WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+
+_ANYTIME = {"", "any", "all", "anytime", "ever"}
+
 
 def parse_when(text: str | None, *, end: bool = False) -> float | None:
     """Turn the loose time expressions a model or a person writes into an epoch.
@@ -197,11 +201,28 @@ def parse_when(text: str | None, *, end: bool = False) -> float | None:
         return (today + timedelta(hours=12)).timestamp()
     if value in {"this evening", "tonight"}:
         return (today + timedelta(hours=18)).timestamp()
-    if value == "last week":
-        return (today - timedelta(days=7)).timestamp()
+    if value in {"last night"}:
+        return (today - timedelta(hours=6)).timestamp()
+    if value == "tomorrow":
+        start = today + timedelta(days=1)
+        return start.timestamp() if not end else (start + timedelta(days=1)).timestamp() - 1
+    if value in {"this week", "last week"}:
+        start = today - timedelta(days=today.weekday())
+        if value == "last week":
+            start = start - timedelta(days=7)
+        return start.timestamp() if not end else now
+    weekday = _WEEKDAYS.get(value.rstrip("."))
+    if weekday is not None:
+        # The most recent time that day started; today counts as "this Monday".
+        start = today - timedelta(days=(today.weekday() - weekday) % 7)
+        return start.timestamp() if not end else (start + timedelta(days=1)).timestamp() - 1
     if value == "last month":
         return (today - timedelta(days=30)).timestamp()
     relative = _RELATIVE.match(value.replace("ago", "").strip())
+    if relative is None:
+        # "an hour ago", "a day ago" — people write the article, models copy it.
+        colloquial = re.sub(r"^(?:a|an)\s+", "1 ", value.replace("ago", "").strip())
+        relative = _RELATIVE.match(colloquial)
     if relative:
         count = int(relative.group("n"))
         unit = relative.group("unit").lower()
@@ -234,6 +255,47 @@ def _int(value: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, number))
 
 
+def resolve_bound(text: Any, *, end: bool = False) -> tuple[float | None, str]:
+    """Parse a time bound and say whether the text was understood.
+
+    Returns (epoch or None, the text to report when it was given but not parsed).
+    A silent fall-through to "all time" would answer a different question than the
+    one asked ("since tomorrow" returning today's screen), so the caller gets the
+    raw text back and can say the filter was ignored.
+    """
+    raw = str(text or "").strip()
+    value = parse_when(raw, end=end)
+    ignored = raw if (value is None and raw.lower() not in _ANYTIME) else ""
+    return value, ignored
+
+
+def partial_search(
+    query: str, *, since: float | None = None, until: float | None = None, limit: int = 8
+) -> tuple[list[Any], dict[int, list[str]]]:
+    """Screens that share *some* words with the query, when none share them all.
+
+    Full-text search ANDs the terms, so "card error" misses the screen that says
+    "The card has expired" — the exact screen the person meant. Searching each
+    term and merging keeps the strict result authoritative (it is tried first) and
+    makes the fallback explicit rather than silently loosening every query.
+    """
+    terms = [term for term in db.split_terms(query) if len(term) >= 2][:8]
+    if len(terms) < 2:
+        return [], {}
+    shots: dict[int, Any] = {}
+    matched: dict[int, list[str]] = {}
+    for term in terms:
+        try:
+            hits = db.search(term, since=since, until=until, limit=limit)
+        except Exception:  # pragma: no cover - defensive: a tool must answer
+            continue
+        for shot in hits:
+            shots[shot.id] = shot
+            matched.setdefault(shot.id, []).append(term)
+    ordered = sorted(shots.values(), key=lambda shot: shot.captured_at, reverse=True)[:limit]
+    return ordered, {shot.id: matched.get(shot.id, []) for shot in ordered}
+
+
 def screen_recall(args: dict | None = None, **kwargs: Any) -> str:
     data = args or {}
     query = str(data.get("query") or "").strip()
@@ -241,14 +303,24 @@ def screen_recall(args: dict | None = None, **kwargs: Any) -> str:
         return "Error: screen_recall needs a query — the words that were on the screen."
     settings = get_settings()
     lazy_scan(settings)
-    since = parse_when(data.get("since"))
-    until = parse_when(data.get("until"), end=True)
+    since, since_ignored = resolve_bound(data.get("since"))
+    until, until_ignored = resolve_bound(data.get("until"), end=True)
+    ignored = "; ".join(
+        f"“{value}” was not understood, so that bound was ignored"
+        for value in (since_ignored, until_ignored)
+        if value
+    )
+    suffix = f"\n\n({ignored}.)" if ignored else ""
     limit = _int(data.get("limit"), 8, 1, 25)
     try:
         shots = db.search(query, since=since, until=until, limit=limit)
     except Exception as exc:  # pragma: no cover - defensive: a tool must answer
         return f"Error: screen search failed ({exc}). Try /peripheral scan, then retry."
     total = db.stats()["count"]
+    if not shots and db.stats()["chars"]:
+        partial, terms_by_id = partial_search(query, since=since, until=until, limit=limit)
+        if partial:
+            return render.partial_results(query, partial, terms_by_id, total=total) + suffix
     if not shots and not db.stats()["chars"]:
         if not ocr.available():
             return render.results(query, shots) + (
@@ -262,22 +334,28 @@ def screen_recall(args: dict | None = None, **kwargs: Any) -> str:
             "Call screen_capture to remember what is on screen now, or check /peripheral "
             "for the OCR engine status."
         )
-    return render.results(query, shots, total=total)
+    return render.results(query, shots, total=total) + suffix
 
 
 def screen_timeline(args: dict | None = None, **kwargs: Any) -> str:
     data = args or {}
     settings = get_settings()
     lazy_scan(settings)
-    since = parse_when(data.get("since")) or parse_when("today")
-    until = parse_when(data.get("until"), end=True) or time.time()
+    since_raw = data.get("since")
+    since, since_ignored = resolve_bound(since_raw)
+    until, until_ignored = resolve_bound(data.get("until"), end=True)
+    since = since or parse_when("today")
+    until = until or time.time()
     limit = _int(data.get("limit"), 40, 1, 120)
     shots = db.recent(limit, since=since, until=until)
     events = db.events_between(since, until, limit=limit) if settings.record_agent_events else []
     label = "Screen timeline"
     if data.get("since"):
         label = f"Screen timeline · since {data.get('since')}"
-    return render.timeline(shots, events, title=label)
+    text = render.timeline(shots, events, title=label)
+    if since_ignored or until_ignored:
+        text += f"\n\n(“{since_ignored or until_ignored}” was not understood, so that bound was ignored.)"
+    return text
 
 
 def screen_show(args: dict | None = None, **kwargs: Any) -> str | dict:

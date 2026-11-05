@@ -87,6 +87,63 @@ def _hermes_home() -> Path | None:
         return None
 
 
+def invalidate_settings() -> None:
+    """Drop the memoised settings so the next call re-reads the config.
+
+    ``/peripheral pause`` and ``/peripheral watch on`` change the config and then
+    answer the user in the same breath; without this the two-second cache would
+    keep the old values alive long enough for the next tool call to contradict the
+    command that was just run.
+    """
+    global _CACHED, _CACHED_AT
+    _CACHED = None
+    _CACHED_AT = 0.0
+
+
+def set_background_capture(enabled: bool) -> bool:
+    """Start or stop the capture thread now, not at the next Hermes restart.
+
+    Returns whether the watcher is running afterwards. ``register()`` only starts
+    the watcher when the setting was already on at load time, so a user who turns
+    it on with ``/peripheral watch on`` used to get the confirmation and no
+    captures until the gateway was restarted.
+    """
+    global _WATCHER
+    invalidate_settings()
+    settings = current_settings()
+    if not enabled or not settings.enabled:
+        if _WATCHER is not None:
+            _WATCHER.stop()
+        return False
+    if _WATCHER is None:
+        _WATCHER = ingest.ScreenWatcher(current_settings)
+    _WATCHER.start(
+        settings.capture_interval_seconds,
+        settings.capture_min_gap_seconds,
+        settings.capture_max_per_hour,
+    )
+    return _WATCHER.running
+
+
+def set_enabled(enabled: bool) -> None:
+    """Apply pause/resume to the background jobs as well as to the tools."""
+    global _SCANNER
+    invalidate_settings()
+    settings = current_settings()
+    if not enabled:
+        if _SCANNER is not None:
+            _SCANNER.stop()
+        if _WATCHER is not None:
+            _WATCHER.stop()
+        return
+    if _SCANNER is None:
+        _SCANNER = ingest.AutoScanner(current_settings)
+    if settings.auto_scan_minutes:
+        _SCANNER.start(settings.auto_scan_minutes)
+    if settings.capture_enabled:
+        set_background_capture(True)
+
+
 # ------------------------------------------------------------------ hooks
 
 _DETAIL_KEYS = ("command", "path", "file_path", "url", "query", "pattern", "prompt", "name")
@@ -177,4 +234,15 @@ def register(ctx: Any) -> None:
     )
 
 
-__all__ = ["register", "current_settings", "PLUGIN_ID", "SCHEMA_KEYS", "db", "ingest", "render"]
+__all__ = [
+    "register",
+    "current_settings",
+    "invalidate_settings",
+    "set_background_capture",
+    "set_enabled",
+    "PLUGIN_ID",
+    "SCHEMA_KEYS",
+    "db",
+    "ingest",
+    "render",
+]

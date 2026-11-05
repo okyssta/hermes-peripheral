@@ -54,6 +54,55 @@ def _label(shot: Shot) -> str:
     return stem if len(stem) <= 58 else stem[:57] + "…"
 
 
+_FOOTER = (
+    "screen_show(id) opens one screen — full text, and the image itself when the model "
+    "can see it. screen_capture() remembers whatever is on screen right now."
+)
+
+
+def _row_lines(index: int, shot: Shot, *, total_rows: int, matched: str = "") -> list[str]:
+    marker = ""
+    if shot.source == "capture":
+        marker = " · live"
+    elif shot.text_chars == 0:
+        marker = " · no text"
+    if matched:
+        marker += f" · matched: {matched}"
+    lines = [
+        f"[{shot.id}] {_when(shot)} · {shot.text_chars:,} chars{marker} · {_label(shot)}"
+    ]
+    snippet = _clean_snippet(shot.snippet.replace("<<", "").replace(">>", "") or shot.title)
+    if snippet:
+        lines.append(f"     “{snippet}”")
+    lines.append(f"     {shot.path}")
+    if shot.thumb_path:
+        lines.append(f"     thumb: {shot.thumb_path}")
+    if index != total_rows:
+        lines.append("")
+    return lines
+
+
+def partial_results(
+    query: str, shots: Sequence[Shot], terms_by_id: dict[int, list[str]], *, total: int | None = None
+) -> str:
+    """Results for a query where no single screen held every word.
+
+    Says so in the first line: a loosened search is still useful, but presenting it
+    as if it were the strict answer would make the memory look unreliable.
+    """
+    header = f"No screen held every word of “{query}”. {len(shots)} share at least one:"
+    if total is not None and total > len(shots):
+        header += f" (of {total:,} indexed)"
+    lines = [header, ""]
+    for index, shot in enumerate(shots, start=1):
+        lines.extend(
+            _row_lines(index, shot, total_rows=len(shots), matched=", ".join(terms_by_id.get(shot.id) or []))
+        )
+    lines.append("")
+    lines.append(_FOOTER)
+    return "\n".join(lines)
+
+
 def results(query: str, shots: Sequence[Shot], *, total: int | None = None) -> str:
     if not shots:
         return (
@@ -67,25 +116,9 @@ def results(query: str, shots: Sequence[Shot], *, total: int | None = None) -> s
     header += f" · nearest {shots[0].ago}"
     lines = [header, ""]
     for index, shot in enumerate(shots, start=1):
-        marker = ""
-        if shot.source == "capture":
-            marker = " · live"
-        elif shot.text_chars == 0:
-            marker = " · no text"
-        lines.append(f"[{shot.id}] {_when(shot)} · {shot.text_chars:,} chars{marker} · {_label(shot)}")
-        snippet = _clean_snippet(shot.snippet.replace("<<", "").replace(">>", "") or shot.title)
-        if snippet:
-            lines.append(f"     “{snippet}”")
-        lines.append(f"     {shot.path}")
-        if shot.thumb_path:
-            lines.append(f"     thumb: {shot.thumb_path}")
-        if index != len(shots):
-            lines.append("")
+        lines.extend(_row_lines(index, shot, total_rows=len(shots)))
     lines.append("")
-    lines.append(
-        "screen_show(id) opens one screen — full text, and the image itself when the model "
-        "can see it. screen_capture() remembers whatever is on screen right now."
-    )
+    lines.append(_FOOTER)
     return "\n".join(lines)
 
 
@@ -145,6 +178,38 @@ def timeline(shots: Sequence[Shot], events: Iterable[dict], *, title: str = "Scr
             lines.append(f"— {day} —")
             last_day = day
         lines.append(f"  {text}")
+    return "\n".join(lines)
+
+
+def first_run_hint(*, image_count: int, folders: Sequence[str], capture_available: bool) -> str:
+    """What to do next, in the order that costs the user least.
+
+    A fresh install has nothing indexed, so the status output is the whole product:
+    it has to say how many images are already sitting in the watched folders (one
+    command away from a working memory) instead of only naming the folders.
+    """
+    where = ", ".join(folders) if folders else "no folders"
+    lines: list[str] = []
+    if image_count:
+        lines.append(
+            f"Nothing indexed yet — {image_count} image{'s' if image_count != 1 else ''} already in "
+            f"{where}. /peripheral scan reads them now (local OCR, nothing leaves the machine)."
+        )
+    elif capture_available:
+        lines.append(
+            "Nothing indexed yet and no screenshots were found. /peripheral capture photographs the "
+            "screen now; /peripheral watch on keeps a history of it as it changes."
+        )
+    else:
+        lines.append(
+            "Nothing indexed yet: no screenshots found in the folders above, and this machine has no "
+            "display to capture. Set watch_dirs to the folder your screenshots land in — "
+            "/peripheral config shows the folders in use."
+        )
+    lines.append(
+        "You can also just ask: “what was that error I saw yesterday?” — the agent calls screen_recall "
+        "itself. /peripheral help lists every command."
+    )
     return "\n".join(lines)
 
 
