@@ -56,7 +56,8 @@ def test_indexes_screenshots_and_finds_them_by_text(hermes_home, tmp_path, ocr_r
     assert "passed" in hits[0].snippet.lower()
 
     hits = db.search("estimated charges")
-    assert hits and "42" in (hits[0].title + hits[0].snippet)
+    assert hits, "the AWS billing screen should match"
+    assert "Screenshot 2026-11-04 at 18.20.00" in hits[0].path
 
     assert db.search("kubernetes ingress") == []
 

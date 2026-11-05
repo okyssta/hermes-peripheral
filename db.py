@@ -305,15 +305,60 @@ def drop_missing_files(known_paths: set[str]) -> int:
 # ---------------------------------------------------------------- reads
 
 _WORD_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_'./:@+-]*")
+_SPLIT_LINES = re.compile(r"\n+")
 
 
-def fts_query(text: str, *, max_terms: int = 12) -> str:
-    """Turn free text into a safe FTS5 query.
+def best_snippet(text: str, terms: list[str], *, width: int = 200) -> str:
+    """The line of the screen that best answers the query.
 
-    Each term becomes a quoted prefix token; operators in the user's wording
-    (AND, OR, NEAR, *, ^, :) cannot escape into FTS syntax that raises. Terms are
-    implicitly AND-ed so "stripe expired" is a conjunction rather than a flood.
+    FTS5's own snippet window is chosen by BM25 over tokens, which on a dense page
+    can land on a neighbouring paragraph. The full text is stored, so the window is
+    re-chosen here: the line holding the most query terms wins, preferring the one
+    that packs them closest together.
     """
+    if not text or not terms:
+        return ""
+    lowered = [term.lower() for term in terms if term]
+    if not lowered:
+        return ""
+    best, best_score = "", 0.0
+    for line in _SPLIT_LINES.split(text):
+        stripped = " ".join(line.split())
+        if len(stripped) < 12:
+            continue
+        haystack = stripped.lower()
+        occurrences = sum(haystack.count(term) for term in lowered)
+        if not occurrences:
+            continue
+        # Coverage first, then how often the words appear, then a mild preference
+        # for a line long enough to be quoted as evidence rather than a heading.
+        coverage = sum(1 for term in lowered if term in haystack) / len(lowered)
+        score = (
+            occurrences * 2.0
+            + coverage * 2.0
+            + min(len(haystack), 160) / 160.0
+        )
+        if score > best_score:
+            best, best_score = stripped, score
+    if not best:
+        return ""
+    if len(best) <= width:
+        return best
+    # Window a long line around the first query term so the quote starts with
+    # evidence rather than with whatever navigation text sits to its left.
+    lowered_line = best.lower()
+    positions = [lowered_line.find(term) for term in lowered if term in lowered_line]
+    start = max(0, min(positions or [0]) - 30)
+    window = best[start : start + width].strip()
+    if start:
+        window = "…" + window
+    if start + width < len(best):
+        window = window.rstrip() + "…"
+    return window
+
+
+def split_terms(text: str, *, max_terms: int = 12) -> list[str]:
+    """The words a query is made of, in order, deduped case-insensitively."""
     terms: list[str] = []
     for match in _WORD_RE.finditer(text or ""):
         word = match.group(0).strip(".'/:@+-").replace('"', "")
@@ -323,7 +368,17 @@ def fts_query(text: str, *, max_terms: int = 12) -> str:
             terms.append(word)
         if len(terms) >= max_terms:
             break
-    return " ".join(f'"{term}"*' for term in terms)
+    return terms
+
+
+def fts_query(text: str, *, max_terms: int = 12) -> str:
+    """Turn free text into a safe FTS5 query.
+
+    Each term becomes a quoted prefix token; operators in the user's wording
+    (AND, OR, NEAR, *, ^, :) cannot escape into FTS syntax that raises. Terms are
+    implicitly AND-ed so "stripe expired" is a conjunction rather than a flood.
+    """
+    return " ".join(f'"{term}"*' for term in split_terms(text, max_terms=max_terms))
 
 
 def _row_to_shot(row: sqlite3.Row, snippet: str = "") -> Shot:
@@ -377,6 +432,7 @@ def search(
         return []
 
     now = time.time()
+    terms = split_terms(text)
     scored: list[Shot] = []
     for row in rows:
         bm = float(row["bm"] or 0.0)  # negative; more negative == better
@@ -385,8 +441,9 @@ def search(
         richness = min(1.0, float(row["text_chars"] or 0) / 2500.0)
         relevance = -bm
         score = relevance * (0.55 + 0.45 * recency) + 0.35 * richness
-        scored.append(_row_to_shot(row, row["snip"] or ""))
-        scored[-1] = Shot(**{**scored[-1].__dict__, "score": score})
+        snippet = best_snippet(row["ocr_text"] or "", terms) or (row["snip"] or "")
+        shot = _row_to_shot(row, snippet)
+        scored.append(Shot(**{**shot.__dict__, "score": score}))
 
     scored.sort(key=lambda shot: shot.score, reverse=True)
     return scored[:limit]
