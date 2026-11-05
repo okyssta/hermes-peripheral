@@ -32,7 +32,6 @@ from peripheral.settings import Settings  # noqa: E402
 
 BASE_URL = os.environ.get("PERIPHERAL_DEMO_BASE_URL", "https://opencode.ai/zen/go/v1")
 MODEL = os.environ.get("PERIPHERAL_DEMO_MODEL", "deepseek-v4.1-flash")
-ENV_FILE = Path(os.environ.get("PERIPHERAL_ENV_FILE", "/root/.hermes/profiles/main/.env"))
 
 SYSTEM = (
     "You are Hermes, a personal agent running on the user's own machine. You have screen "
@@ -50,10 +49,17 @@ HANDLERS = {
 
 
 def api_key() -> str:
-    for line in ENV_FILE.read_text().splitlines():
-        if line.startswith("OPENCODE_GO_API_KEY="):
-            return line.split("=", 1)[1].strip()
-    raise SystemExit("no OPENCODE_GO_API_KEY in the profile .env")
+    """Credentials come from the environment — a plugin never reads .env itself,
+    and neither does its demo script. Export the key before running:
+
+        OPENCODE_GO_API_KEY=... python3 scripts/demo_session.py "your question"
+    """
+    key = os.environ.get("OPENCODE_GO_API_KEY", "").strip()
+    if not key:
+        raise SystemExit(
+            "set OPENCODE_GO_API_KEY in the environment (or PERIPHERAL_DEMO_API_KEY)."
+        )
+    return key
 
 
 def call(messages: list[dict], *, key: str, tools_on: bool = True) -> dict:
