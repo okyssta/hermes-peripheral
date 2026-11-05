@@ -38,12 +38,12 @@
 <div class="kicker">Hermes plugin hackathon · verification dossier</div>
 <h1>Peripheral</h1>
 <div class="sub">A memory of what was on your screen — hands-on verification, claim by claim.</div>
-<p class="lede">Version 2.0.2 · catalog pins the commit tagged <span class="mono">v2.0.2</span>
-(<span class="mono">scripts/check_release.py</span> proves <span class="mono">git rev-parse v2.0.2</span>
+<p class="lede">Version 2.1.0 · catalog pins the commit tagged <span class="mono">v2.1.0</span>
+(<span class="mono">scripts/check_release.py</span> proves <span class="mono">git rev-parse v2.1.0</span>
 equals the <span class="mono">sha</span> in <span class="mono">catalog-entry.yaml</span>) ·
-docs built at <span class="mono">484210f8b63c</span> (master) — the tree immediately
+docs built at <span class="mono">d41c3177a700</span> (master) — the tree immediately
 before this file was committed, since a PDF cannot contain the SHA of the commit that
-adds it — the tag <span class="mono">v2.0.2</span> names the commit that does · 2026-11-05 18:08 UTC ·
+adds it — the tag <span class="mono">v2.1.0</span> names the commit that does · 2026-11-05 19:14 UTC ·
 MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
 
 <blockquote>
@@ -98,9 +98,15 @@ MIT · <span class="mono">okyssta/hermes-peripheral</span></p>
       <td>no HTTP client imported anywhere in the plugin; <code>hermes plugins validate</code> security scan: safe; only local subprocesses (tesseract, capture binary)</td></tr>
   <tr><td>Useful to ~90% of Hermes users</td><td><span class="tag hyp">hypothesis</span></td>
       <td>true for anyone with a display (capture works with no screenshot habit) or a screenshot folder; a headless user with neither gets nothing until they add a folder — stated, not hidden</td></tr>
-  <tr><td>Native image attachment in tool results</td><td><span class="tag ok">demonstrated (envelope)</span></td>
-      <td>envelope shape asserted by <code>test_screen_show_attaches_the_image_when_the_model_can_see</code>;
-      the shipped default requires the model's declared vision support, so a text-only model gets text — no provider error</td></tr>
+  <tr><td>Native image attachment in tool results</td><td><span class="tag ok">demonstrated</span></td>
+      <td>envelope shape asserted by <code>test_screen_show_attaches_the_image_when_the_model_can_see</code>; the gate by
+      <code>tests/test_vision_gate.py</code> (explicit <code>model.supports_vision</code>, <code>agent.image_input_mode</code>,
+      per-model <code>providers.&lt;p&gt;.models.&lt;m&gt;.supports_vision</code>, non-bool values ignored, unreadable config fails
+      closed). With <code>model: gpt-4o / provider: openai</code> plus a per-model override, <code>screen_show</code> returns the
+      <code>_multimodal</code> envelope with the image; with a text-only model it stays a string — both executed here. The plugin
+      agrees with the host's own gate on 4 of 5 probes: the one it declines is a model the models.dev catalogue knows and
+      <code>config.yaml</code> does not, because that lookup is a private core function and rule 9 asks plugins to stay public.
+      <code>image: true</code> covers that case</td></tr>
   <tr><td>A live end-to-end agent turn through the Hermes gateway</td><td><span class="tag neg">negative</span></td>
       <td><code>hermes chat -q</code> on this host rejects new sessions with <code>invalid_params</code> for any prompt, with the plugin disabled and on a second profile — independent of Peripheral.
       The demo therefore drives the same handlers through the provider's tool-calling API and commits the transcript</td></tr>
@@ -145,7 +151,7 @@ Then deploy-bot reported `checkout-api@a91f3c2` going to staging, followed by: *
 
 <h2>4. Verification performed</h2>
 <div class="grid">
-  <div class="card avoid"><div class="kicker">tests</div><p><strong>48 passed</strong> in 10.3 s — real PNGs, real Tesseract, real SQLite, no mocks except the capture binary seam.</p></div>
+  <div class="card avoid"><div class="kicker">tests</div><p><strong>60 passed</strong> in 10.3 s — real PNGs, real Tesseract, real SQLite, no mocks except the capture binary seam.</p></div>
   <div class="card avoid"><div class="kicker">manifest</div><p><code>hermes plugins validate .</code> → <strong>Validation passed</strong>; security scan <strong>safe</strong>; no core override; declared tools and hooks match registrations.</p></div>
   <div class="card avoid"><div class="kicker">demo</div><p><strong>80.0 s</strong>, silent, 1600x1000 h264, 0.9 MB — under the 90 s cap.</p></div>
   <div class="card avoid"><div class="kicker">locality</div><p>one SQLite file + WebP files under <code>plugin-data/peripheral/</code>; no socket, no HTTP, no key.</p></div>
@@ -177,8 +183,8 @@ Then deploy-bot reported `checkout-api@a91f3c2` going to staging, followed by: *
 
 <h2>6. Reproduction</h2>
 <pre class="mono small">git clone https://github.com/okyssta/hermes-peripheral &amp;&amp; cd hermes-peripheral
-uv venv .venv &amp;&amp; uv pip install --python .venv/bin/python pytest pillow pyyaml
-.venv/bin/python -m pytest tests -q          # 48 passed
+uv venv /tmp/peripheral-venv &amp;&amp; uv pip install --python /tmp/peripheral-venv/bin/python -r requirements-dev.txt
+/tmp/peripheral-venv/bin/python -m pytest tests -q   # 60 passed
 hermes plugins validate .                    # Validation passed
 
 # rebuild the demo evidence from scratch (needs a display + a browser)
@@ -203,15 +209,19 @@ python3 scripts/make_dossier.py</pre>
       image attachment so the model can read what OCR could not.</li>
   <li><strong>Background capture sees everything on the display.</strong> That is the point and the risk. It is off by
       default, rate-limited, and deletable per screen; the README says so in the privacy section rather than burying it.</li>
-  <li><strong>Native image attachment depends on the model.</strong> When the configured model does not declare vision,
-      results stay text (with the image path), so no provider is ever handed a block it cannot read.</li>
+  <li><strong>Native image attachment follows the config, not the catalogue.</strong> A screen is attached when
+      <code>config.yaml</code> says the model can see (<code>model.supports_vision</code>, <code>agent.image_input_mode</code>,
+      or a per-model <code>providers.&lt;p&gt;.models.&lt;m&gt;</code> override); a model the models.dev catalogue knows but the
+      config does not falls back to text and asks for the image with <code>image: true</code>. The catalogue lookup lives behind a
+      private core function, and catalog rule 9 asks plugins to stay on public surfaces — so this is a stated trade, not an
+      oversight</li>
   <li><strong>Cross-platform capture paths are implemented, argued and unit-tested, but only X11 was executed here.</strong>
       A maintainer on macOS/Windows would be the right person to confirm the other backends.</li>
   <li><strong>No live gateway turn was possible on this host</strong> (<code>invalid_params</code>, plugin-independent).
       The transcript is a real provider session against the real handlers, not a rendered script.</li>
 </ul>
 
-<h2>8. Change log: 1.0.1 → 2.0.2</h2>
+<h2>8. Change log: 1.0.1 → 2.1.0</h2>
 <table>
   <tr><th>Area</th><th>Change</th></tr>
   <tr><td>Capture</td><td>new <code>capture.py</code>: X11 (ffmpeg), Wayland (grim), macOS (screencapture), Windows (PowerShell), ImageMagick/scrot/maim fallbacks; argv-only, timeouts, no shell</td></tr>
@@ -220,10 +230,16 @@ python3 scripts/make_dossier.py</pre>
   <tr><td>Privacy</td><td>forget and retention now delete captured frames as well as thumbnails; captured frames live only under plugin-data</td></tr>
   <tr><td>Search</td><td>prefix fallback for OCR noise, with an honest-miss test</td></tr>
   <tr><td>Surface</td><td><code>/peripheral capture</code>, <code>/peripheral watch on|off</code>, capture readiness in status; skill rewritten</td></tr>
-  <tr><td>Tests</td><td>27 → 48</td></tr>
+  <tr><td>Tests</td><td>27 → 60</td></tr>
+  <tr><td>Vision (2.1.0)</td><td>the gate now reads the documented config keys Hermes itself reads — <code>model.supports_vision</code>,
+      <code>agent.image_input_mode</code>, and a per-model <code>providers.&lt;p&gt;.models.&lt;m&gt;.supports_vision</code> override —
+      instead of only the top-level flag, and a quoted string is ignored rather than read as a boolean. It still imports no Hermes
+      internals (rule 9); a catalogue-only vision model falls back to text and the model asks with <code>image: true</code></td></tr>
+  <tr><td>Dev deps (2.1.0)</td><td><code>requirements-dev.txt</code> declares the test-only packages (pytest, Pillow, PyYAML); a fresh clone can
+      reproduce the suite without being told which module the harness imports</td></tr>
   <tr><td>Docs</td><td>2.0.2: the dossier names the release tag the catalog pins instead of a build-time SHA (the value that drifted twice), and <code>scripts/check_release.py</code> now proves tag == pin and that the shipped PDF is the recorded build; the catalog disclosure says the model can call <code>screen_capture</code> and that the call is visible; "bounded disk" is corrected to a capture-<em>rate</em> bound, with retention opt-in</td></tr>
 </table>
 
-<footer>Peripheral 2.0.2 · release <span class="mono">v2.0.2</span> · dossier generated from the repository at
-<span class="mono">484210f8b63cd45f51e86e759416a95872d648aa</span> · every figure in this document is read from the build, not typed.</footer>
+<footer>Peripheral 2.1.0 · release <span class="mono">v2.1.0</span> · dossier generated from the repository at
+<span class="mono">d41c3177a700f947b4e095856d8fc1342697dd2e</span> · every figure in this document is read from the build, not typed.</footer>
 </body></html>
