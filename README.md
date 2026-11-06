@@ -145,6 +145,25 @@ Every key is on the plugin page in **Desktop → Settings → Plugins**, and in
 | `thumbnails` | `true` | Keep a 360px thumbnail so a deleted screenshot still resolves |
 | `record_agent_events` | `true` | Log the agent's tool calls next to your screens |
 
+### Desktop app
+
+The package ships a desktop half beside the agent half: a **Screen memory** pane you
+can dock anywhere, a status-bar chip with the number of screens indexed, and a ⌘K
+command (*Peripheral: remember this screen*). It is the same index the tools use —
+browsing it does not call the model, and forgetting from the pane is the same delete
+`screen_forget` performs.
+
+- **It is opt-in.** After installing, open **Capabilities → Plugins** and switch
+  *Peripheral* on; the desktop half stays dark until you do (the Python half has its
+  own `plugins.enabled` gate in `config.yaml`).
+- The pane searches the OCR text, lists frames by time with thumbnails, opens one to
+  read its full text and image, and offers **Capture now**, **Index screenshots** and
+  a two-step **Forget**.
+- All of it goes through the plugin's own routes under
+  `/api/plugins/peripheral/` (`status`, `shots`, `shot/{id}`, `events`, `forget`,
+  `capture`, `scan`). No app internals, no DOM queries, no extra port — the module is
+  fenced to `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`.
+
 ---
 
 ## Using it

@@ -1,0 +1,4 @@
+{
+  "name": "peripheral",
+  "api": "plugin_api.py"
+}
